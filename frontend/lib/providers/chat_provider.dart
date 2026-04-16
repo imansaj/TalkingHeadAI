@@ -13,17 +13,6 @@ class ChatProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSpeaking => _isSpeaking;
 
-  ChatProvider() {
-    AudioService.playerStateStream.listen((state) {
-      final playing = state.playing;
-      final done = state.processingState == ProcessingState.completed;
-      if (_isSpeaking && (!playing || done)) {
-        _isSpeaking = false;
-        notifyListeners();
-      }
-    });
-  }
-
   Future<void> sendText(String text) async {
     if (text.trim().isEmpty) return;
 
@@ -46,11 +35,13 @@ class ChatProvider extends ChangeNotifier {
 
       _isLoading = false;
 
-      // Start speaking BEFORE notifying so the avatar animates immediately
+      // Play audio with lip-sync
       if (response.audioBase64 != null && response.audioBase64!.isNotEmpty) {
         _isSpeaking = true;
         notifyListeners();
         await AudioService.playBase64Audio(response.audioBase64!);
+        _isSpeaking = false;
+        notifyListeners();
       } else {
         notifyListeners();
       }
@@ -62,6 +53,7 @@ class ChatProvider extends ChangeNotifier {
         ),
       );
       _isLoading = false;
+      _isSpeaking = false;
       notifyListeners();
     }
   }

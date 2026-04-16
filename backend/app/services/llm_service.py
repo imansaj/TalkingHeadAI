@@ -1,7 +1,10 @@
+import logging
+
 from openai import OpenAI
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -20,7 +23,8 @@ class LLMService:
         system = (
             "You are TalkingHeadAI, a helpful conversational assistant. "
             "Answer questions using the provided context. "
-            "Be concise, friendly, and accurate."
+            "Be concise, friendly, and accurate. "
+            "Do not use markdown formatting."
         )
 
         context_block = "\n\n---\n\n".join(context_chunks) if context_chunks else ""
@@ -52,7 +56,24 @@ class LLMService:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_prompt},
             ],
-            max_completion_tokens=1024,
+            max_completion_tokens=16384,
         )
-        content = resp.choices[0].message.content
-        return content.strip() if content else "I'm sorry, I couldn't generate a response. Please try again."
+        choice = resp.choices[0]
+        content = choice.message.content
+
+        # Log for debugging
+        logger.info(
+            "LLM response: finish_reason=%s, content_length=%s, usage=%s",
+            choice.finish_reason,
+            len(content) if content else 0,
+            resp.usage,
+        )
+
+        if content and content.strip():
+            return content.strip()
+
+        # Fallback: try output_text for newer response format
+        if hasattr(resp, 'output_text') and resp.output_text:
+            return resp.output_text.strip()
+
+        return "I'm sorry, I couldn't generate a response. Please try again."
