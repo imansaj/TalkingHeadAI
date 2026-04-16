@@ -54,21 +54,23 @@ class LLMService:
         logger.info("[THINKING] Sending to %s | prompt_length=%d chars", settings.openai_model, len(user_prompt))
         t0 = time.time()
 
-        # Use Responses API with message array input
-        resp = cls._client().responses.create(
+        # Use Chat Completions API — most reliable with gpt-5-mini
+        resp = cls._client().chat.completions.create(
             model=settings.openai_model,
-            instructions=system,
-            input=[{"role": "user", "content": user_prompt}],
-            reasoning={"effort": "minimal"},
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ],
         )
 
         t1 = time.time()
-        content = resp.output_text
+        choice = resp.choices[0]
+        content = choice.message.content
 
         logger.info(
-            "[THINKING] LLM done in %.2fs | status=%s | content_length=%s | usage=%s",
+            "[THINKING] LLM done in %.2fs | finish_reason=%s | content_length=%s | usage=%s",
             t1 - t0,
-            resp.status,
+            choice.finish_reason,
             len(content) if content else 0,
             resp.usage,
         )
