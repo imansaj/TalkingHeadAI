@@ -29,9 +29,12 @@ class LLMService:
         )
 
         context_block = "\n\n---\n\n".join(context_chunks) if context_chunks else ""
+        original_ctx_len = len(context_block)
         # Truncate context to avoid exceeding prompt limits
         if len(context_block) > 2000:
             context_block = context_block[:2000]
+            logger.info("[LLM] Context truncated from %d to 2000 chars", original_ctx_len)
+        logger.info("[LLM] context_chunks=%d, context_len=%d, question_len=%d", len(context_chunks), len(context_block), len(question))
 
         if is_new:
             if context_block:
@@ -54,7 +57,8 @@ class LLMService:
                 f"Question: {question}"
             )
 
-        logger.info("[THINKING] Sending to %s | prompt_length=%d chars", settings.openai_model, len(user_prompt))
+        logger.info("[LLM] Sending to %s | user_prompt=%d chars | system=%d chars | total_input=%d chars",
+                    settings.openai_model, len(user_prompt), len(system), len(user_prompt) + len(system))
         t0 = time.time()
 
         # Use Chat Completions API — most reliable with gpt-5-mini
@@ -71,12 +75,14 @@ class LLMService:
         content = choice.message.content
 
         logger.info(
-            "[THINKING] LLM done in %.2fs | finish_reason=%s | content_length=%s | usage=%s",
+            "[LLM] Done in %.2fs | finish_reason=%s | content_length=%d | usage=%s",
             t1 - t0,
             choice.finish_reason,
             len(content) if content else 0,
             resp.usage,
         )
+        if not content or not content.strip():
+            logger.warning("[LLM] Empty content! finish_reason=%s, full_choice=%s", choice.finish_reason, choice)
 
         if content and content.strip():
             return content.strip()

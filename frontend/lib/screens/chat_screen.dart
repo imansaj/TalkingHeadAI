@@ -73,20 +73,33 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: GestureDetector(
                     onTap: () => chat.stopSpeaking(),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF4CAF50), width: 1),
+                        border: Border.all(
+                          color: const Color(0xFF4CAF50),
+                          width: 1,
+                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.stop_circle, color: Color(0xFF4CAF50), size: 20),
+                          Icon(
+                            Icons.stop_circle,
+                            color: Color(0xFF4CAF50),
+                            size: 20,
+                          ),
                           SizedBox(width: 6),
                           Text(
                             'Stop Speaking',
-                            style: TextStyle(color: Color(0xFF4CAF50), fontSize: 14),
+                            style: TextStyle(
+                              color: Color(0xFF4CAF50),
+                              fontSize: 14,
+                            ),
                           ),
                         ],
                       ),
