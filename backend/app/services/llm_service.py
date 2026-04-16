@@ -56,7 +56,8 @@ class LLMService:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_prompt},
             ],
-            max_completion_tokens=16384,
+            max_completion_tokens=4096,
+            reasoning={"effort": "low"},
         )
         choice = resp.choices[0]
         content = choice.message.content
