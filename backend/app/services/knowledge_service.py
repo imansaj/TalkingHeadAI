@@ -45,13 +45,25 @@ class KnowledgeService:
         logger.info("[THINKING] RAG search: %.2fs | results=%d", t1 - t0, len(rag_results))
 
         match = None
+        match_source = None  # "knowledge" or "unanswered"
         if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
+            q_id = rag_results[0]["question_id"]
+            # Check knowledge table first (approved answers)
             table = get_table(settings.dynamodb_table_knowledge)
-            resp = table.get_item(Key={"question_id": rag_results[0]["question_id"]})
+            resp = table.get_item(Key={"question_id": q_id})
             match = resp.get("Item")
+            if match:
+                match_source = "knowledge"
+            else:
+                # Check unanswered table (previously asked but not approved)
+                unanswered_table = get_table(settings.dynamodb_table_unanswered)
+                resp = unanswered_table.get_item(Key={"question_id": q_id})
+                match = resp.get("Item")
+                if match:
+                    match_source = "unanswered"
 
-        if match:
-            # Case B: Known question
+        if match and match_source == "knowledge":
+            # Case B: Known approved question
             table = get_table(settings.dynamodb_table_knowledge)
             new_count = int(match.get("times_asked", 1)) + 1
             table.update_item(
@@ -63,6 +75,14 @@ class KnowledgeService:
                 "answer_type": AnswerType.KNOWN,
                 "text": f"{new_count} people have asked this question. {match['answer']}",
                 "times_asked": new_count,
+            }
+
+        if match and match_source == "unanswered":
+            # Case C: Previously asked (unanswered) — reuse the general response
+            return {
+                "answer_type": AnswerType.NEW,
+                "text": "This question was asked before. " + match.get("general_response", ""),
+                "times_asked": None,
             }
 
         # Case A: New question — RAG general response
@@ -91,6 +111,9 @@ class KnowledgeService:
                 "status": "pending",
             }
         )
+
+        # Add to FAISS index so similar future questions can match
+        RAGService.add_entry(q_id, f"Q: {question}\nA: {general_response}")
 
         return {
             "answer_type": AnswerType.NEW,

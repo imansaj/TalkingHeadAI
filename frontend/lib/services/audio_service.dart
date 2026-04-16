@@ -16,8 +16,10 @@ class AudioService {
     await _player.play();
 
     // Wait for playback to actually complete
+    // Use orElse to avoid "Bad state: No element" if stream closes early (e.g. stop() called)
     await _player.processingStateStream.firstWhere(
       (state) => state == ProcessingState.completed,
+      orElse: () => ProcessingState.idle,
     );
   }
 
