@@ -29,6 +29,9 @@ class LLMService:
         )
 
         context_block = "\n\n---\n\n".join(context_chunks) if context_chunks else ""
+        # Truncate context to avoid exceeding prompt limits
+        if len(context_block) > 2000:
+            context_block = context_block[:2000]
 
         if is_new:
             if context_block:

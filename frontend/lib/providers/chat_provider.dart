@@ -13,6 +13,12 @@ class ChatProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSpeaking => _isSpeaking;
 
+  Future<void> stopSpeaking() async {
+    await AudioService.stop();
+    _isSpeaking = false;
+    notifyListeners();
+  }
+
   Future<void> sendText(String text) async {
     if (text.trim().isEmpty) return;
 
