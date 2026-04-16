@@ -56,7 +56,7 @@ class LLMService:
             instructions=system,
             input=user_prompt,
             max_output_tokens=1024,
-            reasoning={"effort": "none"},
+            reasoning={"effort": "minimal"},
         )
 
         content = resp.output_text
