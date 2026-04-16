@@ -10,7 +10,7 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
-        value: gpt-4o-mini
+        value: gpt-5-mini
       - key: OPENAI_EMBEDDING_MODEL
         value: text-embedding-3-small
       - key: ELEVENLABS_API_KEY
@@ -37,12 +37,6 @@ services:
     plan: free
     envVars:
       - key: API_BASE_URL
-        fromService:
-          name: talkingheadai-api
-          type: web
-          property: host
+        sync: false  # Set to https://talkingheadai-api.onrender.com
       - key: WS_BASE_URL
-        fromService:
-          name: talkingheadai-api
-          type: web
-          property: host
+        sync: false  # Set to wss://talkingheadai-api.onrender.com
