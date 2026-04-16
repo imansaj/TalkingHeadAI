@@ -1,5 +1,7 @@
 import logging
+import re
 import time
+from collections.abc import Generator
 
 from openai import OpenAI
 
@@ -8,6 +10,9 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Sentence boundary: period/!/?/… followed by whitespace or end-of-string
+_SENTENCE_RE = re.compile(r'(?<=[.!?…])\s+')
+
 
 class LLMService:
     @staticmethod
@@ -15,12 +20,7 @@ class LLMService:
         return OpenAI(api_key=settings.openai_api_key)
 
     @classmethod
-    def generate_response(
-        cls,
-        question: str,
-        context_chunks: list[str],
-        is_new: bool,
-    ) -> str:
+    def _build_messages(cls, question: str, context_chunks: list[str], is_new: bool) -> list[dict]:
         system = (
             "You are TalkingHeadAI, a helpful conversational assistant. "
             "Answer questions using the provided context. "
@@ -30,7 +30,6 @@ class LLMService:
 
         context_block = "\n\n---\n\n".join(context_chunks) if context_chunks else ""
         original_ctx_len = len(context_block)
-        # Truncate context to avoid exceeding prompt limits
         if len(context_block) > 2000:
             context_block = context_block[:2000]
             logger.info("[LLM] Context truncated from %d to 2000 chars", original_ctx_len)
@@ -57,17 +56,25 @@ class LLMService:
                 f"Question: {question}"
             )
 
-        logger.info("[LLM] Sending to %s | user_prompt=%d chars | system=%d chars | total_input=%d chars",
-                    settings.openai_model, len(user_prompt), len(system), len(user_prompt) + len(system))
+        return [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    @classmethod
+    def generate_response(
+        cls,
+        question: str,
+        context_chunks: list[str],
+        is_new: bool,
+    ) -> str:
+        messages = cls._build_messages(question, context_chunks, is_new)
+        logger.info("[LLM] Sending to %s (non-streaming)", settings.openai_model)
         t0 = time.time()
 
-        # Use Chat Completions API — most reliable with gpt-5-mini
         resp = cls._client().chat.completions.create(
             model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages=messages,
         )
 
         t1 = time.time()
@@ -88,3 +95,34 @@ class LLMService:
             return content.strip()
 
         return "I'm sorry, I couldn't generate a response. Please try again."
+
+    @classmethod
+    def generate_response_stream(
+        cls,
+        question: str,
+        context_chunks: list[str],
+        is_new: bool,
+    ) -> Generator[str, None, None]:
+        """Yield text chunks as they arrive from the OpenAI streaming API.
+
+        Each yielded string is a small token-level chunk.
+        """
+        messages = cls._build_messages(question, context_chunks, is_new)
+        logger.info("[LLM] Sending to %s (streaming)", settings.openai_model)
+        t0 = time.time()
+
+        stream = cls._client().chat.completions.create(
+            model=settings.openai_model,
+            messages=messages,
+            stream=True,
+        )
+
+        full_text = []
+        for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                full_text.append(delta.content)
+                yield delta.content
+
+        t1 = time.time()
+        logger.info("[LLM] Stream done in %.2fs | total_length=%d", t1 - t0, sum(len(t) for t in full_text))

@@ -1,19 +1,33 @@
+import base64
+import json
 import logging
+import re
 import time
+
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.services.knowledge_service import KnowledgeService
+from app.services.llm_service import LLMService
 from app.services.stt_service import STTService
 from app.services.tts_service import TTSService
-from app.models.schemas import ChatRequest, ChatResponse
+from app.services.rag_service import RAGService
+from app.models.schemas import ChatRequest, ChatResponse, AnswerType
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Sentence-end pattern: .!? followed by space or end
+_SENTENCE_END = re.compile(r'[.!?…]\s*$')
+
+
+def _sse_event(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
 
 @router.post("/text", response_model=ChatResponse)
 async def chat_text(req: ChatRequest):
-    """Text-based chat — returns text + audio."""
+    """Text-based chat — returns text + audio (non-streaming fallback)."""
     try:
         t0 = time.time()
         result = KnowledgeService.answer_question(req.text)
@@ -34,6 +48,172 @@ async def chat_text(req: ChatRequest):
     except Exception as e:
         logger.exception("Chat text error")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/stream")
+async def chat_stream(req: ChatRequest):
+    """Streaming chat — SSE stream of text chunks + audio chunks.
+
+    Events:
+      text_chunk  {"text": "..."}          — incremental LLM text
+      audio_chunk {"audio_base64": "..."}  — TTS for a completed sentence
+      done        {"answer_type": "...", "times_asked": ..., "full_text": "..."}
+      error       {"detail": "..."}
+    """
+
+    def generate():
+        try:
+            t0 = time.time()
+            question = req.text
+
+            # --- RAG lookup (same logic as KnowledgeService) ---
+            from app.config import get_settings
+            from app.db.dynamodb import get_table
+            from decimal import Decimal
+
+            settings = get_settings()
+            rag_results = RAGService.search(question, top_k=5)
+
+            match = None
+            match_source = None
+            SIMILARITY_THRESHOLD = 0.82
+
+            if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
+                q_id = rag_results[0]["question_id"]
+                table = get_table(settings.dynamodb_table_knowledge)
+                resp = table.get_item(Key={"question_id": q_id})
+                match = resp.get("Item")
+                if match:
+                    match_source = "knowledge"
+                else:
+                    unanswered_table = get_table(settings.dynamodb_table_unanswered)
+                    resp = unanswered_table.get_item(Key={"question_id": q_id})
+                    match = resp.get("Item")
+                    if match:
+                        match_source = "unanswered"
+
+            # --- Case B: Known answer — send immediately (no streaming needed) ---
+            if match and match_source == "knowledge":
+                table = get_table(settings.dynamodb_table_knowledge)
+                new_count = int(match.get("times_asked", 1)) + 1
+                table.update_item(
+                    Key={"question_id": match["question_id"]},
+                    UpdateExpression="SET times_asked = :c",
+                    ExpressionAttributeValues={":c": Decimal(str(new_count))},
+                )
+                full_text = f"{new_count} people have asked this question. {match['answer']}"
+                yield _sse_event("text_chunk", {"text": full_text})
+
+                # TTS for known answer
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.openai_api_key)
+                tts_resp = client.audio.speech.create(model="tts-1", voice="alloy", input=full_text)
+                audio_b64 = base64.b64encode(tts_resp.content).decode("utf-8")
+                yield _sse_event("audio_chunk", {"audio_base64": audio_b64})
+
+                yield _sse_event("done", {
+                    "answer_type": "known",
+                    "times_asked": new_count,
+                    "full_text": full_text,
+                })
+                return
+
+            # --- Case C: Previously asked unanswered ---
+            if match and match_source == "unanswered":
+                full_text = "This question was asked before. " + match.get("general_response", "")
+                yield _sse_event("text_chunk", {"text": full_text})
+
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.openai_api_key)
+                tts_resp = client.audio.speech.create(model="tts-1", voice="alloy", input=full_text)
+                audio_b64 = base64.b64encode(tts_resp.content).decode("utf-8")
+                yield _sse_event("audio_chunk", {"audio_base64": audio_b64})
+
+                yield _sse_event("done", {
+                    "answer_type": "new",
+                    "times_asked": None,
+                    "full_text": full_text,
+                })
+                return
+
+            # --- Case A: New question — stream LLM + sentence-level TTS ---
+            context_chunks = [r["text"] for r in rag_results]
+
+            prefix = "This is a new question. I will give you a general response. "
+            yield _sse_event("text_chunk", {"text": prefix})
+
+            from openai import OpenAI
+            client = OpenAI(api_key=settings.openai_api_key)
+
+            sentence_buffer = ""
+            full_text_parts = [prefix]
+
+            for token in LLMService.generate_response_stream(
+                question=question,
+                context_chunks=context_chunks,
+                is_new=True,
+            ):
+                yield _sse_event("text_chunk", {"text": token})
+                full_text_parts.append(token)
+                sentence_buffer += token
+
+                # Check if we have a complete sentence to TTS
+                if _SENTENCE_END.search(sentence_buffer) and len(sentence_buffer) >= 20:
+                    tts_resp = client.audio.speech.create(
+                        model="tts-1", voice="alloy", input=sentence_buffer.strip()
+                    )
+                    audio_b64 = base64.b64encode(tts_resp.content).decode("utf-8")
+                    yield _sse_event("audio_chunk", {"audio_base64": audio_b64})
+                    sentence_buffer = ""
+
+            # TTS any remaining text
+            if sentence_buffer.strip():
+                tts_resp = client.audio.speech.create(
+                    model="tts-1", voice="alloy", input=sentence_buffer.strip()
+                )
+                audio_b64 = base64.b64encode(tts_resp.content).decode("utf-8")
+                yield _sse_event("audio_chunk", {"audio_base64": audio_b64})
+
+            full_text = "".join(full_text_parts)
+
+            # Store in unanswered pool (same as KnowledgeService)
+            import uuid
+            from datetime import datetime
+            q_id = str(uuid.uuid4())
+            general_response = full_text[len(prefix):]
+            unanswered_table = get_table(settings.dynamodb_table_unanswered)
+            unanswered_table.put_item(
+                Item={
+                    "question_id": q_id,
+                    "question": question,
+                    "general_response": general_response,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "status": "pending",
+                }
+            )
+            RAGService.add_entry(q_id, f"Q: {question}\nA: {general_response}")
+
+            t1 = time.time()
+            logger.info("[TIMING] Streaming total: %.2fs", t1 - t0)
+
+            yield _sse_event("done", {
+                "answer_type": "new",
+                "times_asked": None,
+                "full_text": full_text,
+            })
+
+        except Exception as e:
+            logger.exception("Stream error")
+            yield _sse_event("error", {"detail": str(e)})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/voice", response_model=ChatResponse)

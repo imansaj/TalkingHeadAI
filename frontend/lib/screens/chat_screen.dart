@@ -142,6 +142,28 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ],
                   ),
+                )
+              else if (chat.isStreaming)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white24,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Streaming...',
+                        style: TextStyle(color: Colors.white24, fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
 
               // Input area

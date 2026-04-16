@@ -1,7 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models.dart';
+
+/// Parsed SSE event from the streaming chat endpoint.
+class ChatStreamEvent {
+  final String type; // "text_chunk", "audio_chunk", "done", "error"
+  final Map<String, dynamic> data;
+
+  ChatStreamEvent({required this.type, required this.data});
+}
 
 class ApiService {
   static final String _base = AppConfig.baseUrl;
@@ -21,6 +30,58 @@ class ApiService {
       throw Exception('Chat failed (${resp.statusCode}): $body');
     }
     return ChatResponse.fromJson(jsonDecode(resp.body));
+  }
+
+  /// Streaming chat via SSE — returns a stream of events.
+  /// Events: text_chunk, audio_chunk, done, error.
+  static Stream<ChatStreamEvent> chatStream(String text) async* {
+    final client = http.Client();
+    try {
+      final request = http.Request('POST', Uri.parse('$_base/api/chat/stream'));
+      request.headers['Content-Type'] = 'application/json';
+      request.headers['Accept'] = 'text/event-stream';
+      request.body = jsonEncode({'text': text});
+
+      final response = await client.send(request);
+
+      if (response.statusCode != 200) {
+        throw Exception('Stream failed (${response.statusCode})');
+      }
+
+      // Parse SSE from byte stream
+      String buffer = '';
+      String? currentEvent;
+      String currentData = '';
+
+      await for (final chunk in response.stream.transform(utf8.decoder)) {
+        buffer += chunk;
+
+        // Process complete lines
+        while (buffer.contains('\n')) {
+          final newlineIdx = buffer.indexOf('\n');
+          final line = buffer.substring(0, newlineIdx).trimRight();
+          buffer = buffer.substring(newlineIdx + 1);
+
+          if (line.startsWith('event: ')) {
+            currentEvent = line.substring(7);
+          } else if (line.startsWith('data: ')) {
+            currentData = line.substring(6);
+          } else if (line.isEmpty && currentEvent != null) {
+            // End of event — emit it
+            try {
+              final data = jsonDecode(currentData) as Map<String, dynamic>;
+              yield ChatStreamEvent(type: currentEvent, data: data);
+            } catch (_) {
+              // Skip malformed events
+            }
+            currentEvent = null;
+            currentData = '';
+          }
+        }
+      }
+    } finally {
+      client.close();
+    }
   }
 
   // ── Knowledge Base ────────────────────────────────
