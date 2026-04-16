@@ -81,7 +81,7 @@ class KnowledgeService:
             )
             return {
                 "answer_type": AnswerType.KNOWN,
-                "text": llm_answer,
+                "text": f"{new_count} people have asked this question. {llm_answer}",
                 "times_asked": new_count,
             }
 
@@ -102,7 +102,10 @@ class KnowledgeService:
             is_new=True,
         )
 
-        full_response = general_response
+        full_response = (
+            "This is a new question. I will give you a general response. "
+            + general_response
+        )
 
         # Store in unanswered pool
         q_id = str(uuid.uuid4())

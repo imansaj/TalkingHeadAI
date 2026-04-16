@@ -107,8 +107,14 @@ async def chat_stream(req: ChatRequest):
                     ExpressionAttributeValues={":c": Decimal(str(new_count))},
                 )
 
+                yield _sse_event("meta", {"answer_type": "known", "times_asked": new_count})
+
+                prefix = f"{new_count} people have asked this question. "
+                prefix_audio = _tts(client, prefix)
+                yield _sse_event("sentence", {"text": prefix, "audio_base64": prefix_audio})
+
                 sentence_buffer = ""
-                full_text_parts = []
+                full_text_parts = [prefix]
 
                 for token in LLMService.generate_response_stream(
                     question=question,
@@ -137,6 +143,7 @@ async def chat_stream(req: ChatRequest):
 
             # --- Case C: Previously asked unanswered ---
             if match and match_source == "unanswered":
+                yield _sse_event("meta", {"answer_type": "repeated", "times_asked": None})
                 full_text = match.get("general_response", "")
                 audio_b64 = _tts(client, full_text)
                 yield _sse_event("sentence", {"text": full_text, "audio_base64": audio_b64})
@@ -149,10 +156,16 @@ async def chat_stream(req: ChatRequest):
                 return
 
             # --- Case A: New question — stream LLM + sentence-level TTS ---
+            yield _sse_event("meta", {"answer_type": "new", "times_asked": None})
+
             context_chunks = [r["text"] for r in rag_results]
 
+            prefix = "This is a new question. I will give you a general response. "
+            prefix_audio = _tts(client, prefix)
+            yield _sse_event("sentence", {"text": prefix, "audio_base64": prefix_audio})
+
             sentence_buffer = ""
-            full_text_parts = []
+            full_text_parts = [prefix]
 
             for token in LLMService.generate_response_stream(
                 question=question,
@@ -176,7 +189,7 @@ async def chat_stream(req: ChatRequest):
             import uuid
             from datetime import datetime
             q_id = str(uuid.uuid4())
-            general_response = full_text
+            general_response = full_text[len(prefix):]
             unanswered_table = get_table(settings.dynamodb_table_unanswered)
             unanswered_table.put_item(
                 Item={

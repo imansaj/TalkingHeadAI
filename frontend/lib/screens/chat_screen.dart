@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models.dart';
 import '../providers/chat_provider.dart';
@@ -264,6 +265,29 @@ class _MessageBubble extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
+            if (message.text.isNotEmpty)
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: message.text));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Copied to clipboard'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Icon(
+                      Icons.copy,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

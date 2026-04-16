@@ -95,6 +95,18 @@ class ChatProvider extends ChangeNotifier {
         if (_audioGeneration != myGeneration) break;
 
         switch (event.type) {
+          case 'meta':
+            final answerType = event.data['answer_type'] as String?;
+            final timesAsked = event.data['times_asked'] as int?;
+            final idx = _messages.length - 1;
+            _messages[idx] = ChatMessage(
+              text: _messages[idx].text,
+              isUser: false,
+              answerType: answerType,
+              timesAsked: timesAsked,
+            );
+            notifyListeners();
+
           case 'sentence':
             final sentenceText = event.data['text'] as String? ?? '';
             final audioB64 = event.data['audio_base64'] as String? ?? '';
