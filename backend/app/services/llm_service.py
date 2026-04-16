@@ -50,31 +50,26 @@ class LLMService:
                 f"Question: {question}"
             )
 
-        resp = cls._client().chat.completions.create(
+        # Use Responses API — properly supports reasoning.effort for reasoning models
+        resp = cls._client().responses.create(
             model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_completion_tokens=4096,
+            instructions=system,
+            input=user_prompt,
+            max_output_tokens=4096,
             reasoning={"effort": "low"},
         )
-        choice = resp.choices[0]
-        content = choice.message.content
+
+        content = resp.output_text
 
         # Log for debugging
         logger.info(
-            "LLM response: finish_reason=%s, content_length=%s, usage=%s",
-            choice.finish_reason,
+            "LLM response: status=%s, content_length=%s, usage=%s",
+            resp.status,
             len(content) if content else 0,
             resp.usage,
         )
 
         if content and content.strip():
             return content.strip()
-
-        # Fallback: try output_text for newer response format
-        if hasattr(resp, 'output_text') and resp.output_text:
-            return resp.output_text.strip()
 
         return "I'm sorry, I couldn't generate a response. Please try again."
