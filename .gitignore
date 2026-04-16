@@ -11,3 +11,6 @@ backend/.venv/
 # Frontend
 frontend/.dart_tool/
 frontend/build/
+
+.env.example
+backend/.env.example
