@@ -39,7 +39,11 @@ class SessionService:
 
         for i, chunk in enumerate(chunks):
             chunk_id = f"session_{session_id}_{i}"
-            RAGService.add_entry(chunk_id, f"[Session: {item['title']}]\n{chunk}")
+            RAGService.add_entry(
+                chunk_id,
+                embed_text=chunk,
+                context_text=f"[Session: {item['title']}]\n{chunk}",
+            )
 
         table.update_item(
             Key={"session_id": session_id},

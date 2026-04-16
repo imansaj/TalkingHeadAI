@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-SIMILARITY_THRESHOLD = 0.82
+SIMILARITY_THRESHOLD = 0.75
 
 
 class KnowledgeService:
@@ -46,6 +46,9 @@ class KnowledgeService:
 
         match = None
         match_source = None  # "knowledge" or "unanswered"
+        if rag_results:
+            logger.info("[MATCHING] Top result: score=%.4f, q_id=%s, threshold=%.2f",
+                        rag_results[0]["score"], rag_results[0]["question_id"], SIMILARITY_THRESHOLD)
         if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
             q_id = rag_results[0]["question_id"]
             # Check knowledge table first (approved answers)
@@ -63,7 +66,7 @@ class KnowledgeService:
                     match_source = "unanswered"
 
         if match and match_source == "knowledge":
-            # Case B: Known approved question
+            # Case B: Known approved question — use LLM for natural delivery
             table = get_table(settings.dynamodb_table_knowledge)
             new_count = int(match.get("times_asked", 1)) + 1
             table.update_item(
@@ -71,17 +74,22 @@ class KnowledgeService:
                 UpdateExpression="SET times_asked = :c",
                 ExpressionAttributeValues={":c": Decimal(str(new_count))},
             )
+            llm_answer = LLMService.generate_response(
+                question=question,
+                context_chunks=[match["answer"]],
+                is_new=False,
+            )
             return {
                 "answer_type": AnswerType.KNOWN,
-                "text": f"{new_count} people have asked this question. {match['answer']}",
+                "text": llm_answer,
                 "times_asked": new_count,
             }
 
         if match and match_source == "unanswered":
             # Case C: Previously asked (unanswered) — reuse the general response
             return {
-                "answer_type": AnswerType.NEW,
-                "text": "This question was asked before. " + match.get("general_response", ""),
+                "answer_type": AnswerType.REPEATED,
+                "text": match.get("general_response", ""),
                 "times_asked": None,
             }
 
@@ -94,10 +102,7 @@ class KnowledgeService:
             is_new=True,
         )
 
-        full_response = (
-            "This is a new question. I will give you a general response. "
-            + general_response
-        )
+        full_response = general_response
 
         # Store in unanswered pool
         q_id = str(uuid.uuid4())
@@ -112,8 +117,8 @@ class KnowledgeService:
             }
         )
 
-        # Add to FAISS index so similar future questions can match
-        RAGService.add_entry(q_id, f"Q: {question}\nA: {general_response}")
+        # Add to FAISS index — embed question for matching, store Q+A for context
+        RAGService.add_entry(q_id, embed_text=question, context_text=f"Q: {question}\nA: {general_response}")
 
         return {
             "answer_type": AnswerType.NEW,
@@ -139,8 +144,8 @@ class KnowledgeService:
         table = get_table(settings.dynamodb_table_knowledge)
         table.put_item(Item=item)
 
-        # Add to vector index
-        RAGService.add_entry(q_id, f"Q: {question}\nA: {answer}")
+        # Add to vector index — embed question for matching, store Q+A for context
+        RAGService.add_entry(q_id, embed_text=question, context_text=f"Q: {question}\nA: {answer}")
         return item
 
     @classmethod
@@ -160,7 +165,7 @@ class KnowledgeService:
 
         # Update vector index
         RAGService.remove_entry(question_id)
-        RAGService.add_entry(question_id, f"Q: {item['question']}\nA: {answer}")
+        RAGService.add_entry(question_id, embed_text=item['question'], context_text=f"Q: {item['question']}\nA: {answer}")
 
         item["answer"] = answer
         item["updated_at"] = now

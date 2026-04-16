@@ -52,31 +52,36 @@ async def chat_text(req: ChatRequest):
 
 @router.post("/stream")
 async def chat_stream(req: ChatRequest):
-    """Streaming chat — SSE stream of text chunks + audio chunks.
+    """Streaming chat — SSE stream of synced text+audio sentence events.
 
     Events:
-      text_chunk  {"text": "..."}          — incremental LLM text
-      audio_chunk {"audio_base64": "..."}  — TTS for a completed sentence
+      sentence    {"text": "...", "audio_base64": "..."}  — one sentence with its audio
       done        {"answer_type": "...", "times_asked": ..., "full_text": "..."}
       error       {"detail": "..."}
     """
+
+    def _tts(client, text: str) -> str:
+        """Generate TTS and return base64-encoded audio."""
+        tts_resp = client.audio.speech.create(model="tts-1", voice="alloy", input=text)
+        return base64.b64encode(tts_resp.content).decode("utf-8")
 
     def generate():
         try:
             t0 = time.time()
             question = req.text
 
-            # --- RAG lookup (same logic as KnowledgeService) ---
             from app.config import get_settings
             from app.db.dynamodb import get_table
             from decimal import Decimal
+            from openai import OpenAI
 
             settings = get_settings()
+            client = OpenAI(api_key=settings.openai_api_key)
             rag_results = RAGService.search(question, top_k=5)
 
             match = None
             match_source = None
-            SIMILARITY_THRESHOLD = 0.82
+            SIMILARITY_THRESHOLD = 0.75
 
             if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
                 q_id = rag_results[0]["question_id"]
@@ -92,7 +97,7 @@ async def chat_stream(req: ChatRequest):
                     if match:
                         match_source = "unanswered"
 
-            # --- Case B: Known answer — send immediately (no streaming needed) ---
+            # --- Case B: Known answer ---
             if match and match_source == "knowledge":
                 table = get_table(settings.dynamodb_table_knowledge)
                 new_count = int(match.get("times_asked", 1)) + 1
@@ -101,16 +106,28 @@ async def chat_stream(req: ChatRequest):
                     UpdateExpression="SET times_asked = :c",
                     ExpressionAttributeValues={":c": Decimal(str(new_count))},
                 )
-                full_text = f"{new_count} people have asked this question. {match['answer']}"
-                yield _sse_event("text_chunk", {"text": full_text})
 
-                # TTS for known answer
-                from openai import OpenAI
-                client = OpenAI(api_key=settings.openai_api_key)
-                tts_resp = client.audio.speech.create(model="tts-1", voice="alloy", input=full_text)
-                audio_b64 = base64.b64encode(tts_resp.content).decode("utf-8")
-                yield _sse_event("audio_chunk", {"audio_base64": audio_b64})
+                sentence_buffer = ""
+                full_text_parts = []
 
+                for token in LLMService.generate_response_stream(
+                    question=question,
+                    context_chunks=[match["answer"]],
+                    is_new=False,
+                ):
+                    full_text_parts.append(token)
+                    sentence_buffer += token
+
+                    if _SENTENCE_END.search(sentence_buffer) and len(sentence_buffer) >= 20:
+                        audio_b64 = _tts(client, sentence_buffer.strip())
+                        yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+                        sentence_buffer = ""
+
+                if sentence_buffer.strip():
+                    audio_b64 = _tts(client, sentence_buffer.strip())
+                    yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+
+                full_text = "".join(full_text_parts)
                 yield _sse_event("done", {
                     "answer_type": "known",
                     "times_asked": new_count,
@@ -120,17 +137,12 @@ async def chat_stream(req: ChatRequest):
 
             # --- Case C: Previously asked unanswered ---
             if match and match_source == "unanswered":
-                full_text = "This question was asked before. " + match.get("general_response", "")
-                yield _sse_event("text_chunk", {"text": full_text})
-
-                from openai import OpenAI
-                client = OpenAI(api_key=settings.openai_api_key)
-                tts_resp = client.audio.speech.create(model="tts-1", voice="alloy", input=full_text)
-                audio_b64 = base64.b64encode(tts_resp.content).decode("utf-8")
-                yield _sse_event("audio_chunk", {"audio_base64": audio_b64})
+                full_text = match.get("general_response", "")
+                audio_b64 = _tts(client, full_text)
+                yield _sse_event("sentence", {"text": full_text, "audio_base64": audio_b64})
 
                 yield _sse_event("done", {
-                    "answer_type": "new",
+                    "answer_type": "repeated",
                     "times_asked": None,
                     "full_text": full_text,
                 })
@@ -139,48 +151,32 @@ async def chat_stream(req: ChatRequest):
             # --- Case A: New question — stream LLM + sentence-level TTS ---
             context_chunks = [r["text"] for r in rag_results]
 
-            prefix = "This is a new question. I will give you a general response. "
-            yield _sse_event("text_chunk", {"text": prefix})
-
-            from openai import OpenAI
-            client = OpenAI(api_key=settings.openai_api_key)
-
             sentence_buffer = ""
-            full_text_parts = [prefix]
+            full_text_parts = []
 
             for token in LLMService.generate_response_stream(
                 question=question,
                 context_chunks=context_chunks,
                 is_new=True,
             ):
-                yield _sse_event("text_chunk", {"text": token})
                 full_text_parts.append(token)
                 sentence_buffer += token
 
-                # Check if we have a complete sentence to TTS
                 if _SENTENCE_END.search(sentence_buffer) and len(sentence_buffer) >= 20:
-                    tts_resp = client.audio.speech.create(
-                        model="tts-1", voice="alloy", input=sentence_buffer.strip()
-                    )
-                    audio_b64 = base64.b64encode(tts_resp.content).decode("utf-8")
-                    yield _sse_event("audio_chunk", {"audio_base64": audio_b64})
+                    audio_b64 = _tts(client, sentence_buffer.strip())
+                    yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
                     sentence_buffer = ""
 
-            # TTS any remaining text
             if sentence_buffer.strip():
-                tts_resp = client.audio.speech.create(
-                    model="tts-1", voice="alloy", input=sentence_buffer.strip()
-                )
-                audio_b64 = base64.b64encode(tts_resp.content).decode("utf-8")
-                yield _sse_event("audio_chunk", {"audio_base64": audio_b64})
+                audio_b64 = _tts(client, sentence_buffer.strip())
+                yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
 
             full_text = "".join(full_text_parts)
 
-            # Store in unanswered pool (same as KnowledgeService)
             import uuid
             from datetime import datetime
             q_id = str(uuid.uuid4())
-            general_response = full_text[len(prefix):]
+            general_response = full_text
             unanswered_table = get_table(settings.dynamodb_table_unanswered)
             unanswered_table.put_item(
                 Item={
@@ -191,7 +187,7 @@ async def chat_stream(req: ChatRequest):
                     "status": "pending",
                 }
             )
-            RAGService.add_entry(q_id, f"Q: {question}\nA: {general_response}")
+            RAGService.add_entry(q_id, embed_text=question, context_text=f"Q: {question}\nA: {general_response}")
 
             t1 = time.time()
             logger.info("[TIMING] Streaming total: %.2fs", t1 - t0)

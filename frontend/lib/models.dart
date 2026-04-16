@@ -1,7 +1,7 @@
 class ChatMessage {
   final String text;
   final bool isUser;
-  final String? answerType; // "new" | "known"
+  final String? answerType; // "new" | "known" | "repeated"
   final int? timesAsked;
   final String? audioBase64;
 

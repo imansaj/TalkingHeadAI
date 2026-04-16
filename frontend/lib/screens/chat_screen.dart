@@ -243,19 +243,13 @@ class _MessageBubble extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: message.answerType == 'new'
-                      ? Colors.orange.withValues(alpha: 0.3)
-                      : Colors.blue.withValues(alpha: 0.3),
+                  color: _tagColor(message.answerType!).withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  message.answerType == 'new'
-                      ? '✨ New Question'
-                      : '📚 Known Answer',
+                  _tagLabel(message.answerType!, message.timesAsked),
                   style: TextStyle(
-                    color: message.answerType == 'new'
-                        ? Colors.orange
-                        : Colors.lightBlue,
+                    color: _tagColor(message.answerType!),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -274,5 +268,32 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _tagLabel(String answerType, int? timesAsked) {
+    switch (answerType) {
+      case 'new':
+        return '✨ New Question';
+      case 'known':
+        final count = timesAsked != null ? ' · Asked $timesAsked times' : '';
+        return '📚 Known Answer$count';
+      case 'repeated':
+        return '🔁 Repeated Question';
+      default:
+        return answerType;
+    }
+  }
+
+  static Color _tagColor(String answerType) {
+    switch (answerType) {
+      case 'new':
+        return Colors.orange;
+      case 'known':
+        return Colors.lightBlue;
+      case 'repeated':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
   }
 }

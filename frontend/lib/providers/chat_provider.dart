@@ -5,6 +5,13 @@ import '../models.dart';
 import '../services/api_service.dart';
 import '../services/audio_service.dart';
 
+/// A sentence with its paired audio for synchronized playback.
+class _SyncedChunk {
+  final String text;
+  final String audioBase64;
+  _SyncedChunk({required this.text, required this.audioBase64});
+}
+
 class ChatProvider extends ChangeNotifier {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
@@ -12,8 +19,8 @@ class ChatProvider extends ChangeNotifier {
   bool _isStreaming = false;
   int _audioGeneration = 0;
 
-  /// Queue of base64 audio chunks to play sequentially.
-  final Queue<String> _audioQueue = Queue();
+  /// Queue of synced text+audio chunks waiting to be played.
+  final Queue<_SyncedChunk> _syncQueue = Queue();
   bool _isPlayingQueue = false;
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
@@ -23,22 +30,38 @@ class ChatProvider extends ChangeNotifier {
 
   Future<void> stopSpeaking() async {
     _audioGeneration++;
-    _audioQueue.clear();
+    _syncQueue.clear();
     await AudioService.stop();
     _isSpeaking = false;
     notifyListeners();
   }
 
-  /// Play queued audio chunks one after another.
-  Future<void> _processAudioQueue(int generation) async {
+  /// Play queued chunks: reveal sentence text, then play its audio.
+  Future<void> _processSyncQueue(
+    int generation,
+    StringBuffer textBuffer,
+  ) async {
     if (_isPlayingQueue) return;
     _isPlayingQueue = true;
 
-    while (_audioQueue.isNotEmpty && _audioGeneration == generation) {
-      final chunk = _audioQueue.removeFirst();
+    while (_syncQueue.isNotEmpty && _audioGeneration == generation) {
+      final chunk = _syncQueue.removeFirst();
+
+      // Reveal this sentence's text
+      textBuffer.write(chunk.text);
+      final idx = _messages.length - 1;
+      _messages[idx] = ChatMessage(
+        text: textBuffer.toString(),
+        isUser: false,
+        answerType: _messages[idx].answerType,
+        timesAsked: _messages[idx].timesAsked,
+      );
       _isSpeaking = true;
+      _isLoading = false;
       notifyListeners();
-      await AudioService.playBase64Audio(chunk);
+
+      // Play this sentence's audio
+      await AudioService.playBase64Audio(chunk.audioBase64);
     }
 
     if (_audioGeneration == generation) {
@@ -56,41 +79,31 @@ class ChatProvider extends ChangeNotifier {
     _isStreaming = true;
     notifyListeners();
 
-    // Add a placeholder message for the streaming response
-    final botMessage = ChatMessage(text: '', isUser: false);
-    _messages.add(botMessage);
+    // Placeholder for streaming response
+    _messages.add(ChatMessage(text: '', isUser: false));
 
     final myGeneration = ++_audioGeneration;
-    _audioQueue.clear();
+    _syncQueue.clear();
+
+    // Text revealed so far (synced with audio playback)
+    final textBuffer = StringBuffer();
 
     try {
       final stream = ApiService.chatStream(text);
-      final textBuffer = StringBuffer();
 
       await for (final event in stream) {
-        if (_audioGeneration != myGeneration) break; // stopped
+        if (_audioGeneration != myGeneration) break;
 
         switch (event.type) {
-          case 'text_chunk':
-            final chunk = event.data['text'] as String? ?? '';
-            textBuffer.write(chunk);
-            // Update the bot message in-place
-            final idx = _messages.length - 1;
-            _messages[idx] = ChatMessage(
-              text: textBuffer.toString(),
-              isUser: false,
-              answerType: _messages[idx].answerType,
-              timesAsked: _messages[idx].timesAsked,
-            );
-            _isLoading = false; // Got first text — stop showing "Thinking..."
-            notifyListeners();
-
-          case 'audio_chunk':
+          case 'sentence':
+            final sentenceText = event.data['text'] as String? ?? '';
             final audioB64 = event.data['audio_base64'] as String? ?? '';
-            if (audioB64.isNotEmpty) {
-              _audioQueue.add(audioB64);
+            if (sentenceText.isNotEmpty && audioB64.isNotEmpty) {
+              _syncQueue.add(
+                _SyncedChunk(text: sentenceText, audioBase64: audioB64),
+              );
               // Start playing if not already
-              _processAudioQueue(myGeneration);
+              _processSyncQueue(myGeneration, textBuffer);
             }
 
           case 'done':
@@ -98,9 +111,14 @@ class ChatProvider extends ChangeNotifier {
             final timesAsked = event.data['times_asked'] as int?;
             final fullText =
                 event.data['full_text'] as String? ?? textBuffer.toString();
+            // Wait for audio queue to finish before finalizing
+            // (the queue runner will keep going in the background)
+            // Update metadata on the message
             final idx = _messages.length - 1;
             _messages[idx] = ChatMessage(
-              text: fullText,
+              text: _messages[idx].text.isEmpty
+                  ? fullText
+                  : _messages[idx].text,
               isUser: false,
               answerType: answerType,
               timesAsked: timesAsked,
@@ -115,7 +133,6 @@ class ChatProvider extends ChangeNotifier {
         }
       }
     } catch (e) {
-      // If no text was streamed yet, update the placeholder
       final idx = _messages.length - 1;
       if (_messages[idx].text.isEmpty) {
         _messages[idx] = ChatMessage(text: 'Error: $e', isUser: false);

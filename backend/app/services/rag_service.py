@@ -11,7 +11,7 @@ settings = get_settings()
 
 class RAGService:
     _index: faiss.IndexFlatIP | None = None
-    _metadata: list[dict] = []  # [{question_id, text}]
+    _metadata: list[dict] = []  # [{question_id, embed_text, context_text}]
     _dimension: int = 1536  # text-embedding-3-small
 
     @classmethod
@@ -37,7 +37,18 @@ class RAGService:
         if os.path.exists(index_file) and os.path.exists(meta_file):
             cls._index = faiss.read_index(index_file)
             with open(meta_file) as f:
-                cls._metadata = json.load(f)
+                raw_meta = json.load(f)
+            # Migrate old format: {question_id, text} -> {question_id, embed_text, context_text}
+            cls._metadata = []
+            for m in raw_meta:
+                if "embed_text" in m:
+                    cls._metadata.append(m)
+                else:
+                    cls._metadata.append({
+                        "question_id": m["question_id"],
+                        "embed_text": m.get("text", ""),
+                        "context_text": m.get("text", ""),
+                    })
         else:
             cls._index = faiss.IndexFlatIP(cls._dimension)
             cls._metadata = []
@@ -51,10 +62,21 @@ class RAGService:
             json.dump(cls._metadata, f)
 
     @classmethod
-    def add_entry(cls, question_id: str, text: str):
-        vec = cls.embed([text])
+    def add_entry(cls, question_id: str, embed_text: str, context_text: str | None = None):
+        """Add an entry to the FAISS index.
+
+        Args:
+            question_id: Unique ID for this entry.
+            embed_text: Text to embed for similarity search (typically the question).
+            context_text: Text to return as RAG context (typically Q+A). Defaults to embed_text.
+        """
+        vec = cls.embed([embed_text])
         cls._index.add(vec)
-        cls._metadata.append({"question_id": question_id, "text": text})
+        cls._metadata.append({
+            "question_id": question_id,
+            "embed_text": embed_text,
+            "context_text": context_text or embed_text,
+        })
         cls.save_index()
 
     @classmethod
@@ -66,7 +88,7 @@ class RAGService:
         cls._metadata = new_meta
         cls._index = faiss.IndexFlatIP(cls._dimension)
         if cls._metadata:
-            texts = [m["text"] for m in cls._metadata]
+            texts = [m["embed_text"] for m in cls._metadata]
             vecs = cls.embed(texts)
             cls._index.add(vecs)
         cls.save_index()
@@ -82,7 +104,10 @@ class RAGService:
         for score, idx in zip(scores[0], indices[0]):
             if idx < 0:
                 continue
-            entry = cls._metadata[idx].copy()
-            entry["score"] = float(score)
-            results.append(entry)
+            entry = cls._metadata[idx]
+            results.append({
+                "question_id": entry["question_id"],
+                "text": entry["context_text"],
+                "score": float(score),
+            })
         return results
