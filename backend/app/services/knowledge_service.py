@@ -34,7 +34,14 @@ class KnowledgeService:
 
     @classmethod
     def answer_question(cls, question: str) -> dict:
-        match = cls.find_matching_question(question)
+        # Single embedding search — reuse results for both matching and context
+        rag_results = RAGService.search(question, top_k=5)
+
+        match = None
+        if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
+            table = get_table(settings.dynamodb_table_knowledge)
+            resp = table.get_item(Key={"question_id": rag_results[0]["question_id"]})
+            match = resp.get("Item")
 
         if match:
             # Case B: Known question
@@ -52,10 +59,7 @@ class KnowledgeService:
             }
 
         # Case A: New question — RAG general response
-        context_chunks = []
-        rag_results = RAGService.search(question, top_k=5)
-        for r in rag_results:
-            context_chunks.append(r["text"])
+        context_chunks = [r["text"] for r in rag_results]
 
         general_response = LLMService.generate_response(
             question=question,

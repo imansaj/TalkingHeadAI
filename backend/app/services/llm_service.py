@@ -55,7 +55,7 @@ class LLMService:
             model=settings.openai_model,
             instructions=system,
             input=user_prompt,
-            max_output_tokens=4096,
+            max_output_tokens=1024,
             reasoning={"effort": "none"},
         )
 
