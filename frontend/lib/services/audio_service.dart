@@ -7,8 +7,7 @@ class AudioService {
 
   static Future<void> playBase64Audio(String base64Audio) async {
     final bytes = base64Decode(base64Audio);
-    final dataUri =
-        'data:audio/mpeg;base64,$base64Audio';
+    final dataUri = 'data:audio/mpeg;base64,$base64Audio';
     await _player.setUrl(dataUri);
     await _player.play();
   }

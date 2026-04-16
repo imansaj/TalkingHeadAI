@@ -167,12 +167,14 @@ class _HeadPainter3D extends CustomPainter {
     final neckGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFFE8BA8A),
-        const Color(0xFFD4A06A),
-      ],
+      colors: [const Color(0xFFE8BA8A), const Color(0xFFD4A06A)],
     );
-    final neckRect = Rect.fromLTWH(cx - radius * 0.25, cy + radius * 0.6, radius * 0.5, radius * 0.5);
+    final neckRect = Rect.fromLTWH(
+      cx - radius * 0.25,
+      cy + radius * 0.6,
+      radius * 0.5,
+      radius * 0.5,
+    );
     canvas.drawRRect(
       RRect.fromRectAndRadius(neckRect, const Radius.circular(8)),
       Paint()..shader = neckGradient.createShader(neckRect),
@@ -207,10 +209,7 @@ class _HeadPainter3D extends CustomPainter {
       ..shader = RadialGradient(
         center: const Alignment(0.4, 0.3),
         radius: 0.9,
-        colors: [
-          Colors.transparent,
-          Colors.white.withValues(alpha: 0.08),
-        ],
+        colors: [Colors.transparent, Colors.white.withValues(alpha: 0.08)],
       ).createShader(faceRect)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
@@ -340,12 +339,22 @@ class _HeadPainter3D extends CustomPainter {
 
     final leftBrow = Path()
       ..moveTo(cx - eyeSpacing - browW, browY + 3)
-      ..quadraticBezierTo(cx - eyeSpacing, browY - 3, cx - eyeSpacing + browW, browY + 1);
+      ..quadraticBezierTo(
+        cx - eyeSpacing,
+        browY - 3,
+        cx - eyeSpacing + browW,
+        browY + 1,
+      );
     canvas.drawPath(leftBrow, browPaint);
 
     final rightBrow = Path()
       ..moveTo(cx + eyeSpacing - browW, browY + 1)
-      ..quadraticBezierTo(cx + eyeSpacing, browY - 3, cx + eyeSpacing + browW, browY + 3);
+      ..quadraticBezierTo(
+        cx + eyeSpacing,
+        browY - 3,
+        cx + eyeSpacing + browW,
+        browY + 3,
+      );
     canvas.drawPath(rightBrow, browPaint);
 
     // ── Nose (3D with shading) ──
@@ -363,7 +372,12 @@ class _HeadPainter3D extends CustomPainter {
     final nosePath = Path()
       ..moveTo(cx, cy - radius * 0.06)
       ..lineTo(cx - radius * 0.07, noseY + radius * 0.02)
-      ..quadraticBezierTo(cx, noseY + radius * 0.06, cx + radius * 0.07, noseY + radius * 0.02)
+      ..quadraticBezierTo(
+        cx,
+        noseY + radius * 0.06,
+        cx + radius * 0.07,
+        noseY + radius * 0.02,
+      )
       ..lineTo(cx, cy - radius * 0.06);
     canvas.drawPath(
       nosePath,
@@ -395,17 +409,17 @@ class _HeadPainter3D extends CustomPainter {
 
       // Dark mouth interior
       final mouthInterior = Paint()
-        ..shader = RadialGradient(
-          center: Alignment.center,
-          colors: [
-            const Color(0xFF2D0000),
-            const Color(0xFF5C0000),
-          ],
-        ).createShader(Rect.fromCenter(
-          center: Offset(cx, mouthY),
-          width: mouthWidth * 1.8,
-          height: openHeight * 2,
-        ));
+        ..shader =
+            RadialGradient(
+              center: Alignment.center,
+              colors: [const Color(0xFF2D0000), const Color(0xFF5C0000)],
+            ).createShader(
+              Rect.fromCenter(
+                center: Offset(cx, mouthY),
+                width: mouthWidth * 1.8,
+                height: openHeight * 2,
+              ),
+            );
       canvas.drawOval(
         Rect.fromCenter(
           center: Offset(cx, mouthY),
@@ -430,8 +444,18 @@ class _HeadPainter3D extends CustomPainter {
       // Upper lip
       final upperLip = Path()
         ..moveTo(cx - mouthWidth, mouthY - openHeight * 0.2)
-        ..quadraticBezierTo(cx - mouthWidth * 0.5, mouthY - openHeight * 0.8, cx, mouthY - openHeight * 0.5)
-        ..quadraticBezierTo(cx + mouthWidth * 0.5, mouthY - openHeight * 0.8, cx + mouthWidth, mouthY - openHeight * 0.2);
+        ..quadraticBezierTo(
+          cx - mouthWidth * 0.5,
+          mouthY - openHeight * 0.8,
+          cx,
+          mouthY - openHeight * 0.5,
+        )
+        ..quadraticBezierTo(
+          cx + mouthWidth * 0.5,
+          mouthY - openHeight * 0.8,
+          cx + mouthWidth,
+          mouthY - openHeight * 0.2,
+        );
       canvas.drawPath(
         upperLip,
         Paint()
@@ -444,7 +468,12 @@ class _HeadPainter3D extends CustomPainter {
       // Lower lip
       final lowerLip = Path()
         ..moveTo(cx - mouthWidth * 0.9, mouthY + openHeight * 0.3)
-        ..quadraticBezierTo(cx, mouthY + openHeight * 1.1, cx + mouthWidth * 0.9, mouthY + openHeight * 0.3);
+        ..quadraticBezierTo(
+          cx,
+          mouthY + openHeight * 1.1,
+          cx + mouthWidth * 0.9,
+          mouthY + openHeight * 0.3,
+        );
       canvas.drawPath(
         lowerLip,
         Paint()
@@ -472,8 +501,18 @@ class _HeadPainter3D extends CustomPainter {
       // Upper lip with cupid's bow
       final upperLip = Path()
         ..moveTo(cx - mouthWidth, mouthY)
-        ..quadraticBezierTo(cx - mouthWidth * 0.4, mouthY - radius * 0.04, cx, mouthY - radius * 0.02)
-        ..quadraticBezierTo(cx + mouthWidth * 0.4, mouthY - radius * 0.04, cx + mouthWidth, mouthY);
+        ..quadraticBezierTo(
+          cx - mouthWidth * 0.4,
+          mouthY - radius * 0.04,
+          cx,
+          mouthY - radius * 0.02,
+        )
+        ..quadraticBezierTo(
+          cx + mouthWidth * 0.4,
+          mouthY - radius * 0.04,
+          cx + mouthWidth,
+          mouthY,
+        );
       canvas.drawPath(
         upperLip,
         Paint()
@@ -486,7 +525,12 @@ class _HeadPainter3D extends CustomPainter {
       // Lower lip
       final lowerLip = Path()
         ..moveTo(cx - mouthWidth * 0.85, mouthY + 1)
-        ..quadraticBezierTo(cx, mouthY + radius * 0.07, cx + mouthWidth * 0.85, mouthY + 1);
+        ..quadraticBezierTo(
+          cx,
+          mouthY + radius * 0.07,
+          cx + mouthWidth * 0.85,
+          mouthY + 1,
+        );
       canvas.drawPath(
         lowerLip,
         Paint()
@@ -510,8 +554,16 @@ class _HeadPainter3D extends CustomPainter {
     final blushPaint = Paint()
       ..color = const Color(0xFFFFAAAA).withValues(alpha: 0.12)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-    canvas.drawCircle(Offset(cx - radius * 0.5, cy + radius * 0.15), radius * 0.15, blushPaint);
-    canvas.drawCircle(Offset(cx + radius * 0.5, cy + radius * 0.15), radius * 0.15, blushPaint);
+    canvas.drawCircle(
+      Offset(cx - radius * 0.5, cy + radius * 0.15),
+      radius * 0.15,
+      blushPaint,
+    );
+    canvas.drawCircle(
+      Offset(cx + radius * 0.5, cy + radius * 0.15),
+      radius * 0.15,
+      blushPaint,
+    );
 
     // ── Speaking glow indicator ──
     if (isSpeaking) {
@@ -525,7 +577,9 @@ class _HeadPainter3D extends CustomPainter {
 
       // Sound waves
       final wavePaint = Paint()
-        ..color = const Color(0xFF4CAF50).withValues(alpha: 0.2 + glowValue * 0.15)
+        ..color = const Color(
+          0xFF4CAF50,
+        ).withValues(alpha: 0.2 + glowValue * 0.15)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5;
       for (var i = 1; i <= 3; i++) {
@@ -535,29 +589,32 @@ class _HeadPainter3D extends CustomPainter {
           -pi / 3,
           pi * 2 / 3,
           false,
-          wavePaint..color = wavePaint.color.withValues(alpha: 0.25 - (i * 0.06)),
+          wavePaint
+            ..color = wavePaint.color.withValues(alpha: 0.25 - (i * 0.06)),
         );
       }
     }
   }
 
-  void _drawEar(Canvas canvas, double x, double y, double earRadius, bool isRight) {
+  void _drawEar(
+    Canvas canvas,
+    double x,
+    double y,
+    double earRadius,
+    bool isRight,
+  ) {
     final earGrad = RadialGradient(
-      center: isRight ? const Alignment(-0.5, -0.3) : const Alignment(0.5, -0.3),
-      colors: [
-        const Color(0xFFFFDBAC),
-        const Color(0xFFD4A574),
-      ],
+      center: isRight
+          ? const Alignment(-0.5, -0.3)
+          : const Alignment(0.5, -0.3),
+      colors: [const Color(0xFFFFDBAC), const Color(0xFFD4A574)],
     );
     final earRect = Rect.fromCenter(
       center: Offset(x, y),
       width: earRadius * 2,
       height: earRadius * 3,
     );
-    canvas.drawOval(
-      earRect,
-      Paint()..shader = earGrad.createShader(earRect),
-    );
+    canvas.drawOval(earRect, Paint()..shader = earGrad.createShader(earRect));
     // Inner ear
     canvas.drawOval(
       Rect.fromCenter(

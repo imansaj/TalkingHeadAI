@@ -45,13 +45,14 @@ class ChatProvider extends ChangeNotifier {
       );
 
       _isLoading = false;
-      notifyListeners();
 
-      // Play audio
+      // Start speaking BEFORE notifying so the avatar animates immediately
       if (response.audioBase64 != null && response.audioBase64!.isNotEmpty) {
         _isSpeaking = true;
         notifyListeners();
         await AudioService.playBase64Audio(response.audioBase64!);
+      } else {
+        notifyListeners();
       }
     } catch (e) {
       _messages.add(

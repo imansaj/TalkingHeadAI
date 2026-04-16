@@ -26,13 +26,19 @@ class LLMService:
         context_block = "\n\n---\n\n".join(context_chunks) if context_chunks else ""
 
         if is_new:
-            user_prompt = (
-                "The following question is new and has no approved answer in the knowledge base.\n"
-                "Use the context below (from past sessions and existing knowledge) to give a helpful general response.\n\n"
-                f"Context:\n{context_block}\n\n"
-                f"Question: {question}\n\n"
-                "Provide a general but helpful response."
-            )
+            if context_block:
+                user_prompt = (
+                    "The following question is new and has no approved answer in the knowledge base.\n"
+                    "Use the context below (from past sessions and existing knowledge) to give a helpful general response.\n\n"
+                    f"Context:\n{context_block}\n\n"
+                    f"Question: {question}\n\n"
+                    "Provide a general but helpful response."
+                )
+            else:
+                user_prompt = (
+                    f"Question: {question}\n\n"
+                    "There is no context available yet. Provide a helpful general response based on your knowledge."
+                )
         else:
             user_prompt = (
                 "Use the following approved answer context to respond precisely.\n\n"
@@ -48,4 +54,5 @@ class LLMService:
             ],
             max_completion_tokens=1024,
         )
-        return resp.choices[0].message.content
+        content = resp.choices[0].message.content
+        return content.strip() if content else "I'm sorry, I couldn't generate a response. Please try again."
