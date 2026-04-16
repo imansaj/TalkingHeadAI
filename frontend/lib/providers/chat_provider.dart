@@ -8,12 +8,14 @@ class ChatProvider extends ChangeNotifier {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   bool _isSpeaking = false;
+  int _audioGeneration = 0; // Track which audio session is active
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   bool get isLoading => _isLoading;
   bool get isSpeaking => _isSpeaking;
 
   Future<void> stopSpeaking() async {
+    _audioGeneration++; // Invalidate current audio session
     await AudioService.stop();
     _isSpeaking = false;
     notifyListeners();
@@ -43,11 +45,15 @@ class ChatProvider extends ChangeNotifier {
 
       // Play audio with lip-sync
       if (response.audioBase64 != null && response.audioBase64!.isNotEmpty) {
+        final myGeneration = ++_audioGeneration;
         _isSpeaking = true;
         notifyListeners();
         await AudioService.playBase64Audio(response.audioBase64!);
-        _isSpeaking = false;
-        notifyListeners();
+        // Only clear speaking state if no newer audio started
+        if (_audioGeneration == myGeneration) {
+          _isSpeaking = false;
+          notifyListeners();
+        }
       } else {
         notifyListeners();
       }
