@@ -44,6 +44,21 @@ async def debug_env():
     return {
         "elevenlabs_key_length": len(key),
         "elevenlabs_key_prefix": key[:5] if len(key) > 5 else "EMPTY",
+        "elevenlabs_key_suffix": key[-4:] if len(key) > 4 else "EMPTY",
         "elevenlabs_voice_id": settings.elevenlabs_voice_id,
         "openai_key_set": bool(settings.openai_api_key),
+        "has_whitespace": key != key.strip(),
     }
+
+
+@app.get("/debug/tts-test")
+async def debug_tts():
+    import httpx
+    key = settings.elevenlabs_api_key.strip()
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{settings.elevenlabs_voice_id}"
+    headers = {"xi-api-key": key, "Content-Type": "application/json"}
+    payload = {"text": "test", "model_id": "eleven_multilingual_v2",
+               "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}}
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        return {"status": resp.status_code, "body": resp.text[:300] if resp.status_code != 200 else "OK"}
