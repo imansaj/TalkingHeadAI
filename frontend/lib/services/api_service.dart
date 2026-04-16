@@ -13,9 +13,10 @@ class ApiService {
       Uri.parse('$_base/api/chat/text'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'text': text}),
-    );
+    ).timeout(const Duration(seconds: 120));
     if (resp.statusCode != 200) {
-      throw Exception('Chat failed: ${resp.statusCode}');
+      final body = resp.body;
+      throw Exception('Chat failed (${ resp.statusCode}): $body');
     }
     return ChatResponse.fromJson(jsonDecode(resp.body));
   }

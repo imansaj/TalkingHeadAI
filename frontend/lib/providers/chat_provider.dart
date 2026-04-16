@@ -48,7 +48,7 @@ class ChatProvider extends ChangeNotifier {
     } catch (e) {
       _messages.add(
         ChatMessage(
-          text: 'Error: Could not get response. Please try again.',
+          text: 'Error: $e',
           isUser: false,
         ),
       );
