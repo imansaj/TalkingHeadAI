@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,6 +8,8 @@ from app.api.routes import chat, knowledge, admin, sessions
 from app.api.websocket import router as ws_router
 from app.db.dynamodb import create_tables
 from app.services.rag_service import RAGService
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 settings = get_settings()
 

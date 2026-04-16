@@ -1,4 +1,5 @@
 import logging
+import time
 
 from openai import OpenAI
 
@@ -50,7 +51,10 @@ class LLMService:
                 f"Question: {question}"
             )
 
-        # Use Responses API — pass input as message array to avoid 4096 char string limit
+        logger.info("[THINKING] Sending to %s | prompt_length=%d chars", settings.openai_model, len(user_prompt))
+        t0 = time.time()
+
+        # Use Responses API with message array input
         resp = cls._client().responses.create(
             model=settings.openai_model,
             instructions=system,
@@ -58,11 +62,12 @@ class LLMService:
             reasoning={"effort": "minimal"},
         )
 
+        t1 = time.time()
         content = resp.output_text
 
-        # Log for debugging
         logger.info(
-            "LLM response: status=%s, content_length=%s, usage=%s",
+            "[THINKING] LLM done in %.2fs | status=%s | content_length=%s | usage=%s",
+            t1 - t0,
             resp.status,
             len(content) if content else 0,
             resp.usage,

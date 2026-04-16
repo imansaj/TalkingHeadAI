@@ -1,4 +1,6 @@
 import uuid
+import time
+import logging
 from datetime import datetime
 from decimal import Decimal
 from boto3.dynamodb.conditions import Attr
@@ -8,6 +10,8 @@ from app.db.dynamodb import get_table
 from app.services.rag_service import RAGService
 from app.services.llm_service import LLMService
 from app.models.schemas import AnswerType
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -35,7 +39,10 @@ class KnowledgeService:
     @classmethod
     def answer_question(cls, question: str) -> dict:
         # Single embedding search — reuse results for both matching and context
+        t0 = time.time()
         rag_results = RAGService.search(question, top_k=5)
+        t1 = time.time()
+        logger.info("[THINKING] RAG search: %.2fs | results=%d", t1 - t0, len(rag_results))
 
         match = None
         if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:

@@ -1,4 +1,5 @@
 import logging
+import time
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
 from app.services.knowledge_service import KnowledgeService
@@ -14,8 +15,16 @@ router = APIRouter()
 async def chat_text(req: ChatRequest):
     """Text-based chat — returns text + audio."""
     try:
+        t0 = time.time()
         result = KnowledgeService.answer_question(req.text)
+        t1 = time.time()
+        logger.info("[TIMING] KnowledgeService.answer_question: %.2fs", t1 - t0)
+
         audio_b64 = await TTSService.synthesize_base64(result["text"])
+        t2 = time.time()
+        logger.info("[TIMING] TTSService.synthesize: %.2fs", t2 - t1)
+        logger.info("[TIMING] Total: %.2fs", t2 - t0)
+
         return ChatResponse(
             answer_type=result["answer_type"],
             text=result["text"],
