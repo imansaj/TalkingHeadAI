@@ -9,14 +9,16 @@ class ApiService {
   // ── Chat ──────────────────────────────────────────
 
   static Future<ChatResponse> chatText(String text) async {
-    final resp = await http.post(
-      Uri.parse('$_base/api/chat/text'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'text': text}),
-    ).timeout(const Duration(seconds: 120));
+    final resp = await http
+        .post(
+          Uri.parse('$_base/api/chat/text'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'text': text}),
+        )
+        .timeout(const Duration(seconds: 120));
     if (resp.statusCode != 200) {
       final body = resp.body;
-      throw Exception('Chat failed (${ resp.statusCode}): $body');
+      throw Exception('Chat failed (${resp.statusCode}): $body');
     }
     return ChatResponse.fromJson(jsonDecode(resp.body));
   }

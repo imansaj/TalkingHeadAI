@@ -46,12 +46,7 @@ class ChatProvider extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      _messages.add(
-        ChatMessage(
-          text: 'Error: $e',
-          isUser: false,
-        ),
-      );
+      _messages.add(ChatMessage(text: 'Error: $e', isUser: false));
       _isLoading = false;
       _isSpeaking = false;
       notifyListeners();
