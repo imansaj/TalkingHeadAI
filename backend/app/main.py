@@ -36,3 +36,14 @@ async def startup():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/debug/env")
+async def debug_env():
+    key = settings.elevenlabs_api_key
+    return {
+        "elevenlabs_key_length": len(key),
+        "elevenlabs_key_prefix": key[:5] if len(key) > 5 else "EMPTY",
+        "elevenlabs_voice_id": settings.elevenlabs_voice_id,
+        "openai_key_set": bool(settings.openai_api_key),
+    }
