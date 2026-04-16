@@ -39,4 +39,4 @@ async def startup():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "v7-chatcompletions"}
+    return {"status": "ok", "version": "v8-faiss-fix"}
