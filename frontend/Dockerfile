@@ -5,8 +5,8 @@ WORKDIR /app
 COPY . .
 RUN flutter pub get
 # Pass the backend URL at build time
-ARG API_BASE_URL=http://localhost:8000
-ARG WS_BASE_URL=ws://localhost:8000
+ARG API_BASE_URL=https://talkingheadai-api.onrender.com
+ARG WS_BASE_URL=wss://talkingheadai-api.onrender.com
 RUN flutter build web \
     --dart-define=API_BASE_URL=$API_BASE_URL \
     --dart-define=WS_BASE_URL=$WS_BASE_URL
