@@ -1,0 +1,48 @@
+services:
+  # ── Backend API ──────────────────────────────────
+  - type: web
+    name: talkingheadai-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        value: 21m00Tcm4TlvDq8ikWAM
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: us-east-1
+      - key: FAISS_INDEX_PATH
+        value: data/faiss_index
+      - key: CORS_ORIGINS
+        value: '["*"]'
+
+  # ── Frontend ─────────────────────────────────────
+  - type: web
+    name: talkingheadai-web
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      - key: API_BASE_URL
+        fromService:
+          name: talkingheadai-api
+          type: web
+          property: host
+      - key: WS_BASE_URL
+        fromService:
+          name: talkingheadai-api
+          type: web
+          property: host
