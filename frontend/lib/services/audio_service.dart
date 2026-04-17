@@ -29,7 +29,11 @@ class AudioService {
   }
 
   static Future<void> stop() async {
-    await _player.stop();
+    try {
+      await _player.stop();
+      await _player.dispose();
+    } catch (_) {}
+    _player = AudioPlayer();
   }
 
   static bool get isPlaying => _player.playing;

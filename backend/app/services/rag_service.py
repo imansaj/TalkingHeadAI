@@ -3,6 +3,7 @@ import json
 import numpy as np
 import faiss
 from openai import OpenAI
+import httpx
 
 from app.config import get_settings
 
@@ -16,7 +17,10 @@ class RAGService:
 
     @classmethod
     def _get_client(cls) -> OpenAI:
-        return OpenAI(api_key=settings.openai_api_key)
+        return OpenAI(
+            api_key=settings.openai_api_key,
+            timeout=httpx.Timeout(30.0, connect=10.0),
+        )
 
     @classmethod
     def embed(cls, texts: list[str]) -> np.ndarray:

@@ -110,7 +110,10 @@ class _UnansweredTabState extends State<_UnansweredTab> {
           ),
           title: const Text(
             'Review Question',
-            style: TextStyle(color: Color(0xFFFAFAFA), fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Color(0xFFFAFAFA),
+              fontWeight: FontWeight.w600,
+            ),
           ),
           content: ConstrainedBox(
             constraints: BoxConstraints(
@@ -275,7 +278,10 @@ class _UnansweredTabState extends State<_UnansweredTab> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'Asked: ${e.createdAt}',
-                  style: const TextStyle(color: Color(0xFF52525B), fontSize: 12),
+                  style: const TextStyle(
+                    color: Color(0xFF52525B),
+                    fontSize: 12,
+                  ),
                 ),
               ),
               trailing: ElevatedButton(
@@ -368,7 +374,9 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Question',
-                      labelStyle: const TextStyle(color: const Color(0xFF52525B)),
+                      labelStyle: const TextStyle(
+                        color: const Color(0xFF52525B),
+                      ),
                       filled: true,
                       fillColor: const Color(0xFF09090B),
                       border: OutlineInputBorder(
@@ -392,7 +400,9 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Answer',
-                      labelStyle: const TextStyle(color: const Color(0xFF52525B)),
+                      labelStyle: const TextStyle(
+                        color: const Color(0xFF52525B),
+                      ),
                       filled: true,
                       fillColor: const Color(0xFF09090B),
                       border: OutlineInputBorder(
@@ -594,6 +604,22 @@ class _SessionsTabState extends State<_SessionsTab> {
   final _titleCtrl = TextEditingController();
   final _transcriptCtrl = TextEditingController();
   bool _uploading = false;
+  List<Map<String, dynamic>> _sessions = [];
+  bool _loadingSessions = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSessions();
+  }
+
+  Future<void> _loadSessions() async {
+    setState(() => _loadingSessions = true);
+    try {
+      _sessions = await ApiService.listSessions();
+    } catch (_) {}
+    if (mounted) setState(() => _loadingSessions = false);
+  }
 
   Future<void> _upload() async {
     if (_titleCtrl.text.trim().isEmpty || _transcriptCtrl.text.trim().isEmpty) {
@@ -609,11 +635,10 @@ class _SessionsTabState extends State<_SessionsTab> {
       _transcriptCtrl.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transcript uploaded & will be processed'),
-          ),
+          const SnackBar(content: Text('Transcript uploaded & processed')),
         );
       }
+      _loadSessions();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -622,6 +647,24 @@ class _SessionsTabState extends State<_SessionsTab> {
       }
     }
     if (mounted) setState(() => _uploading = false);
+  }
+
+  Future<void> _processSession(String sessionId) async {
+    try {
+      await ApiService.processSession(sessionId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session processed successfully')),
+        );
+      }
+      _loadSessions();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
   }
 
   @override
@@ -645,7 +688,7 @@ class _SessionsTabState extends State<_SessionsTab> {
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'Session Title',
-              labelStyle: const TextStyle(color: const Color(0xFF52525B)),
+              labelStyle: const TextStyle(color: Color(0xFF52525B)),
               filled: true,
               fillColor: const Color(0xFF18181B),
               border: OutlineInputBorder(
@@ -669,7 +712,7 @@ class _SessionsTabState extends State<_SessionsTab> {
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'Paste transcript here...',
-              labelStyle: const TextStyle(color: const Color(0xFF52525B)),
+              labelStyle: const TextStyle(color: Color(0xFF52525B)),
               filled: true,
               fillColor: const Color(0xFF18181B),
               border: OutlineInputBorder(
@@ -716,6 +759,110 @@ class _SessionsTabState extends State<_SessionsTab> {
               onPressed: _uploading ? null : _upload,
             ),
           ),
+          const SizedBox(height: 32),
+          const Text(
+            'Uploaded Sessions',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_loadingSessions)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+              ),
+            )
+          else if (_sessions.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'No sessions uploaded yet',
+                  style: TextStyle(color: Color(0xFF52525B)),
+                ),
+              ),
+            )
+          else
+            ..._sessions.map((s) {
+              final processed = s['processed'] == true;
+              return Card(
+                color: const Color(0xFF18181B),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Color(0xFF27272A)),
+                ),
+                margin: const EdgeInsets.only(bottom: 10),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  title: Text(
+                    s['title'] ?? 'Untitled',
+                    style: const TextStyle(
+                      color: Color(0xFFFAFAFA),
+                      fontSize: 14,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Created: ${s['created_at'] ?? ''}',
+                      style: const TextStyle(
+                        color: Color(0xFF52525B),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  trailing: processed
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF22C55E,
+                            ).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            '✓ Processed',
+                            style: TextStyle(
+                              color: Color(0xFF22C55E),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      : ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF59E0B),
+                            foregroundColor: const Color(0xFF09090B),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                          ),
+                          onPressed: () =>
+                              _processSession(s['session_id'] as String),
+                          child: const Text(
+                            'Process',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -806,7 +953,10 @@ class _CopyIconButton extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               'Copy $label',
-              style: const TextStyle(color: const Color(0xFF3F3F46), fontSize: 12),
+              style: const TextStyle(
+                color: const Color(0xFF3F3F46),
+                fontSize: 12,
+              ),
             ),
           ],
         ),

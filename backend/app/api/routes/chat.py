@@ -6,6 +6,7 @@ import time
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
+import httpx
 
 from app.services.knowledge_service import KnowledgeService
 from app.services.llm_service import LLMService
@@ -76,8 +77,15 @@ async def chat_stream(req: ChatRequest):
             from openai import OpenAI
 
             settings = get_settings()
-            client = OpenAI(api_key=settings.openai_api_key)
+            client = OpenAI(
+                api_key=settings.openai_api_key,
+                timeout=httpx.Timeout(30.0, connect=10.0),
+            )
+
+            logger.info("[STREAM] Starting RAG search for: %s", question[:80])
+            t_rag = time.time()
             rag_results = RAGService.search(question, top_k=5)
+            logger.info("[STREAM] RAG search done in %.2fs, results=%d", time.time() - t_rag, len(rag_results))
 
             match = None
             match_source = None
@@ -85,17 +93,27 @@ async def chat_stream(req: ChatRequest):
 
             if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
                 q_id = rag_results[0]["question_id"]
+                logger.info("[STREAM] Top match: q_id=%s, score=%.4f", q_id, rag_results[0]["score"])
                 table = get_table(settings.dynamodb_table_knowledge)
                 resp = table.get_item(Key={"question_id": q_id})
                 match = resp.get("Item")
                 if match:
                     match_source = "knowledge"
+                    logger.info("[STREAM] Matched knowledge entry")
                 else:
                     unanswered_table = get_table(settings.dynamodb_table_unanswered)
                     resp = unanswered_table.get_item(Key={"question_id": q_id})
                     match = resp.get("Item")
                     if match:
                         match_source = "unanswered"
+                        logger.info("[STREAM] Matched unanswered entry")
+                    else:
+                        logger.info("[STREAM] q_id=%s not found in knowledge or unanswered tables (session chunk?)", q_id)
+            else:
+                if rag_results:
+                    logger.info("[STREAM] Top score %.4f below threshold %.2f", rag_results[0]["score"], SIMILARITY_THRESHOLD)
+                else:
+                    logger.info("[STREAM] No RAG results")
 
             # --- Case B: Known answer ---
             if match and match_source == "knowledge":
@@ -156,22 +174,30 @@ async def chat_stream(req: ChatRequest):
                 return
 
             # --- Case A: New question — stream LLM + sentence-level TTS ---
+            logger.info("[STREAM] Case A: new question")
             yield _sse_event("meta", {"answer_type": "new", "times_asked": None})
 
             context_chunks = [r["text"] for r in rag_results]
 
             prefix = "This is a new question. I will give you a general response. "
+            logger.info("[STREAM] Generating TTS for prefix...")
+            t_tts = time.time()
             prefix_audio = _tts(client, prefix)
+            logger.info("[STREAM] Prefix TTS done in %.2fs", time.time() - t_tts)
             yield _sse_event("sentence", {"text": prefix, "audio_base64": prefix_audio})
 
             sentence_buffer = ""
             full_text_parts = [prefix]
 
+            logger.info("[STREAM] Starting LLM stream (model=%s, context_chunks=%d)...", settings.openai_model, len(context_chunks))
+            t_llm = time.time()
+            token_count = 0
             for token in LLMService.generate_response_stream(
                 question=question,
                 context_chunks=context_chunks,
                 is_new=True,
             ):
+                token_count += 1
                 full_text_parts.append(token)
                 sentence_buffer += token
 
@@ -179,6 +205,8 @@ async def chat_stream(req: ChatRequest):
                     audio_b64 = _tts(client, sentence_buffer.strip())
                     yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
                     sentence_buffer = ""
+
+            logger.info("[STREAM] LLM stream done in %.2fs, tokens=%d", time.time() - t_llm, token_count)
 
             if sentence_buffer.strip():
                 audio_b64 = _tts(client, sentence_buffer.strip())

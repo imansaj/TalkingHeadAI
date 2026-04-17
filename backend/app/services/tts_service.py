@@ -1,10 +1,14 @@
 import base64
 from openai import OpenAI
+import httpx
 
 from app.config import get_settings
 
 settings = get_settings()
-_client = OpenAI(api_key=settings.openai_api_key)
+_client = OpenAI(
+    api_key=settings.openai_api_key,
+    timeout=httpx.Timeout(30.0, connect=10.0),
+)
 
 
 class TTSService:

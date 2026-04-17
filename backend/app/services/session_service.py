@@ -1,10 +1,12 @@
 import uuid
+import logging
 from datetime import datetime
 
 from app.config import get_settings
 from app.db.dynamodb import get_table
 from app.services.rag_service import RAGService
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -22,6 +24,20 @@ class SessionService:
         }
         table = get_table(settings.dynamodb_table_sessions)
         table.put_item(Item=item)
+
+        # Auto-process: index transcript into FAISS for RAG enrichment
+        try:
+            cls._index_transcript(session_id, title, transcript)
+            item["processed"] = True
+            table.update_item(
+                Key={"session_id": session_id},
+                UpdateExpression="SET processed = :p",
+                ExpressionAttributeValues={":p": True},
+            )
+            logger.info("[SESSION] Auto-processed transcript '%s' (%s)", title, session_id)
+        except Exception:
+            logger.exception("[SESSION] Auto-process failed for '%s' (%s), can retry via /process", title, session_id)
+
         return item
 
     @classmethod
@@ -33,17 +49,7 @@ class SessionService:
         if not item:
             raise ValueError("Session not found")
 
-        # Chunk the transcript into ~500-char segments
-        transcript = item["transcript"]
-        chunks = cls._chunk_text(transcript, max_chars=500)
-
-        for i, chunk in enumerate(chunks):
-            chunk_id = f"session_{session_id}_{i}"
-            RAGService.add_entry(
-                chunk_id,
-                embed_text=chunk,
-                context_text=f"[Session: {item['title']}]\n{chunk}",
-            )
+        cls._index_transcript(session_id, item["title"], item["transcript"])
 
         table.update_item(
             Key={"session_id": session_id},
@@ -53,6 +59,19 @@ class SessionService:
 
         item["processed"] = True
         return item
+
+    @classmethod
+    def _index_transcript(cls, session_id: str, title: str, transcript: str):
+        """Chunk and index a transcript into FAISS."""
+        chunks = cls._chunk_text(transcript, max_chars=500)
+        logger.info("[SESSION] Indexing %d chunks for session '%s'", len(chunks), title)
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"session_{session_id}_{i}"
+            RAGService.add_entry(
+                chunk_id,
+                embed_text=chunk,
+                context_text=f"[Session: {title}]\n{chunk}",
+            )
 
     @classmethod
     def list_sessions(cls) -> list[dict]:

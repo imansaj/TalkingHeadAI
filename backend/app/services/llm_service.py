@@ -4,6 +4,7 @@ import time
 from collections.abc import Generator
 
 from openai import OpenAI
+import httpx
 
 from app.config import get_settings
 
@@ -17,7 +18,10 @@ _SENTENCE_RE = re.compile(r'(?<=[.!?…])\s+')
 class LLMService:
     @staticmethod
     def _client() -> OpenAI:
-        return OpenAI(api_key=settings.openai_api_key)
+        return OpenAI(
+            api_key=settings.openai_api_key,
+            timeout=httpx.Timeout(120.0, connect=10.0),
+        )
 
     @classmethod
     def _build_messages(cls, question: str, context_chunks: list[str], is_new: bool) -> list[dict]:

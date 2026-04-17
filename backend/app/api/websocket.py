@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -7,6 +8,7 @@ from app.services.stt_service import STTService
 from app.services.tts_service import TTSService
 from app.services.knowledge_service import KnowledgeService
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -47,17 +49,31 @@ async def ws_chat(ws: WebSocket):
             if not question.strip():
                 continue
 
-            result = KnowledgeService.answer_question(question)
-            audio_b64 = await TTSService.synthesize_base64(result["text"])
+            try:
+                result = KnowledgeService.answer_question(question)
+                audio_b64 = await TTSService.synthesize_base64(result["text"])
 
-            await ws.send_json(
-                {
-                    "answer_type": result["answer_type"].value,
-                    "text": result["text"],
-                    "audio_base64": audio_b64,
-                    "times_asked": result["times_asked"],
-                    "user_question": question,
-                }
-            )
+                await ws.send_json(
+                    {
+                        "answer_type": result["answer_type"].value,
+                        "text": result["text"],
+                        "audio_base64": audio_b64,
+                        "times_asked": result["times_asked"],
+                        "user_question": question,
+                    }
+                )
+            except Exception as e:
+                logger.exception("Error processing question via WebSocket: %s", question[:80])
+                await ws.send_json(
+                    {
+                        "answer_type": "error",
+                        "text": f"Sorry, an error occurred: {e}",
+                        "audio_base64": "",
+                        "times_asked": None,
+                        "user_question": question,
+                    }
+                )
     except WebSocketDisconnect:
         pass
+    except Exception:
+        logger.exception("WebSocket connection error")

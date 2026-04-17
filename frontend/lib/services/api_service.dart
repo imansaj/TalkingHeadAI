@@ -42,7 +42,12 @@ class ApiService {
       request.headers['Accept'] = 'text/event-stream';
       request.body = jsonEncode({'text': text});
 
-      final response = await client.send(request);
+      final response = await client
+          .send(request)
+          .timeout(
+            const Duration(seconds: 60),
+            onTimeout: () => throw Exception('Server took too long to respond'),
+          );
 
       if (response.statusCode != 200) {
         throw Exception('Stream failed (${response.statusCode})');
@@ -53,7 +58,10 @@ class ApiService {
       String? currentEvent;
       String currentData = '';
 
-      await for (final chunk in response.stream.transform(utf8.decoder)) {
+      await for (final chunk
+          in response.stream
+              .transform(utf8.decoder)
+              .timeout(const Duration(seconds: 120))) {
         buffer += chunk;
 
         // Process complete lines
@@ -131,12 +139,30 @@ class ApiService {
 
   // ── Sessions ──────────────────────────────────────
 
-  static Future<void> uploadTranscript(String title, String transcript) async {
+  static Future<Map<String, dynamic>> uploadTranscript(
+    String title,
+    String transcript,
+  ) async {
     final resp = await http.post(
       Uri.parse('$_base/api/sessions/upload'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'title': title, 'transcript': transcript}),
     );
     if (resp.statusCode != 200) throw Exception('Failed to upload transcript');
+    return jsonDecode(resp.body) as Map<String, dynamic>;
+  }
+
+  static Future<List<Map<String, dynamic>>> listSessions() async {
+    final resp = await http.get(Uri.parse('$_base/api/sessions/'));
+    if (resp.statusCode != 200) throw Exception('Failed to fetch sessions');
+    final list = jsonDecode(resp.body) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  static Future<void> processSession(String sessionId) async {
+    final resp = await http.post(
+      Uri.parse('$_base/api/sessions/$sessionId/process'),
+    );
+    if (resp.statusCode != 200) throw Exception('Failed to process session');
   }
 }

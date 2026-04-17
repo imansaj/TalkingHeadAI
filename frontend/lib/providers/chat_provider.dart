@@ -31,8 +31,10 @@ class ChatProvider extends ChangeNotifier {
   Future<void> stopSpeaking() async {
     _audioGeneration++;
     _syncQueue.clear();
+    _isPlayingQueue = false;
     await AudioService.stop();
     _isSpeaking = false;
+    _isStreaming = false;
     notifyListeners();
   }
 
