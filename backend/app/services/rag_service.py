@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import numpy as np
@@ -6,6 +7,8 @@ from openai import OpenAI
 import httpx
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -115,3 +118,56 @@ class RAGService:
                 "score": float(score),
             })
         return results
+
+    @classmethod
+    def rebuild_from_db(cls):
+        """Rebuild FAISS index from DynamoDB when local index is empty (e.g. ephemeral disk)."""
+        from app.db.dynamodb import get_table
+
+        settings = get_settings()
+
+        entries: list[dict] = []  # [{question_id, embed_text, context_text}]
+
+        # 1) Knowledge table
+        kb_table = get_table(settings.dynamodb_table_knowledge)
+        kb_items = kb_table.scan().get("Items", [])
+        for item in kb_items:
+            q = item.get("question", "")
+            a = item.get("answer", "")
+            if q:
+                entries.append({
+                    "question_id": item["question_id"],
+                    "embed_text": q,
+                    "context_text": f"Q: {q}\nA: {a}",
+                })
+
+        # 2) Unanswered table (pending only — reviewed ones are in knowledge)
+        ua_table = get_table(settings.dynamodb_table_unanswered)
+        ua_items = ua_table.scan().get("Items", [])
+        for item in ua_items:
+            if item.get("status") != "pending":
+                continue
+            q = item.get("question", "")
+            a = item.get("general_response", "")
+            if q:
+                entries.append({
+                    "question_id": item["question_id"],
+                    "embed_text": q,
+                    "context_text": f"Q: {q}\nA: {a}",
+                })
+
+        if not entries:
+            logger.info("[RAG] No DB entries to rebuild index from")
+            return
+
+        logger.info("[RAG] Rebuilding FAISS index from %d DB entries", len(entries))
+
+        # Batch embed all questions
+        texts = [e["embed_text"] for e in entries]
+        vecs = cls.embed(texts)
+
+        cls._index = faiss.IndexFlatIP(cls._dimension)
+        cls._index.add(vecs)
+        cls._metadata = entries
+        cls.save_index()
+        logger.info("[RAG] FAISS index rebuilt: %d vectors", cls._index.ntotal)

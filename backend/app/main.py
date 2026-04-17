@@ -35,6 +35,9 @@ app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])
 async def startup():
     create_tables()
     RAGService.load_index()
+    # Rebuild from DynamoDB if local index is empty (ephemeral disk on Render)
+    if RAGService._index is None or RAGService._index.ntotal == 0:
+        RAGService.rebuild_from_db()
 
 
 @app.get("/health")

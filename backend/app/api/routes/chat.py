@@ -161,13 +161,37 @@ async def chat_stream(req: ChatRequest):
 
             # --- Case C: Previously asked unanswered ---
             if match and match_source == "unanswered":
-                yield _sse_event("meta", {"answer_type": "repeated", "times_asked": None})
-                full_text = match.get("general_response", "")
-                audio_b64 = _tts(client, full_text)
-                yield _sse_event("sentence", {"text": full_text, "audio_base64": audio_b64})
+                yield _sse_event("meta", {"answer_type": "new", "times_asked": None})
 
+                prefix = "This is a new question. I will give you a general response. "
+                prefix_audio = _tts(client, prefix)
+                yield _sse_event("sentence", {"text": prefix, "audio_base64": prefix_audio})
+
+                # Stream a fresh LLM response using RAG context
+                context_chunks = [r["text"] for r in rag_results]
+                sentence_buffer = ""
+                full_text_parts = [prefix]
+
+                for token in LLMService.generate_response_stream(
+                    question=question,
+                    context_chunks=context_chunks,
+                    is_new=True,
+                ):
+                    full_text_parts.append(token)
+                    sentence_buffer += token
+
+                    if _SENTENCE_END.search(sentence_buffer) and len(sentence_buffer) >= 20:
+                        audio_b64 = _tts(client, sentence_buffer.strip())
+                        yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+                        sentence_buffer = ""
+
+                if sentence_buffer.strip():
+                    audio_b64 = _tts(client, sentence_buffer.strip())
+                    yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+
+                full_text = "".join(full_text_parts)
                 yield _sse_event("done", {
-                    "answer_type": "repeated",
+                    "answer_type": "new",
                     "times_asked": None,
                     "full_text": full_text,
                 })

@@ -86,10 +86,20 @@ class KnowledgeService:
             }
 
         if match and match_source == "unanswered":
-            # Case C: Previously asked (unanswered) — reuse the general response
+            # Case C: Previously asked (unanswered) — give fresh general response, no duplicate
+            context_chunks = [r["text"] for r in rag_results]
+            general_response = LLMService.generate_response(
+                question=question,
+                context_chunks=context_chunks,
+                is_new=True,
+            )
+            full_response = (
+                "This is a new question. I will give you a general response. "
+                + general_response
+            )
             return {
-                "answer_type": AnswerType.REPEATED,
-                "text": match.get("general_response", ""),
+                "answer_type": AnswerType.NEW,
+                "text": full_response,
                 "times_asked": None,
             }
 
