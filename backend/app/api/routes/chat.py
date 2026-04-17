@@ -366,4 +366,5 @@ async def chat_voice(audio: UploadFile = File(...)):
         text=result["text"],
         audio_base64=audio_b64,
         times_asked=result["times_asked"],
+        transcript=transcript,
     )

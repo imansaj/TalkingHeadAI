@@ -160,7 +160,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> sendVoice(Uint8List audioBytes) async {
-    _messages.add(ChatMessage(text: '🎤 Voice message', isUser: true));
+    final userMsg = ChatMessage(text: '🎤 Voice message', isUser: true);
+    _messages.add(userMsg);
     _isLoading = true;
     notifyListeners();
 
@@ -171,6 +172,17 @@ class ChatProvider extends ChangeNotifier {
       final response = await ApiService.chatVoice(audioBytes);
 
       if (_audioGeneration != myGeneration) return;
+
+      // Update the user bubble with the transcribed question
+      if (response.transcript != null && response.transcript!.isNotEmpty) {
+        final idx = _messages.indexOf(userMsg);
+        if (idx != -1) {
+          _messages[idx] = ChatMessage(
+            text: '🎤 ${response.transcript}',
+            isUser: true,
+          );
+        }
+      }
 
       _messages.add(
         ChatMessage(

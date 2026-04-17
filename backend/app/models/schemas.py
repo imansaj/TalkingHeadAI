@@ -69,6 +69,7 @@ class ChatResponse(BaseModel):
     text: str
     audio_base64: str | None = None
     times_asked: int | None = None  # for known questions
+    transcript: str | None = None  # STT transcript for voice input
 
 
 # ── Admin ───────────────────────────────────────────────────

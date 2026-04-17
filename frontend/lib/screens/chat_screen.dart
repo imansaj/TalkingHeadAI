@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 import '../models.dart';
 import '../providers/chat_provider.dart';
+import '../services/audio_service.dart';
 import '../widgets/talking_head_widget.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -21,8 +22,18 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
   final _recorder = AudioRecorder();
   bool _isRecording = false;
+  bool _audioUnlocked = false;
+
+  /// Unlock audio playback on mobile browsers (must happen inside a user gesture).
+  void _ensureAudioUnlocked() {
+    if (!_audioUnlocked) {
+      _audioUnlocked = true;
+      AudioService.unlockAudio();
+    }
+  }
 
   void _send() {
+    _ensureAudioUnlocked();
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
@@ -42,6 +53,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _toggleRecording() async {
+    _ensureAudioUnlocked();
     if (_isRecording) {
       // Stop recording — returns a blob URL on web
       final path = await _recorder.stop();

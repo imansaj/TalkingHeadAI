@@ -19,12 +19,14 @@ class ChatResponse {
   final String text;
   final String? audioBase64;
   final int? timesAsked;
+  final String? transcript;
 
   ChatResponse({
     required this.answerType,
     required this.text,
     this.audioBase64,
     this.timesAsked,
+    this.transcript,
   });
 
   factory ChatResponse.fromJson(Map<String, dynamic> json) {
@@ -33,6 +35,7 @@ class ChatResponse {
       text: json['text'] as String,
       audioBase64: json['audio_base64'] as String?,
       timesAsked: json['times_asked'] as int?,
+      transcript: json['transcript'] as String?,
     );
   }
 }
