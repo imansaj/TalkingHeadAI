@@ -83,6 +83,28 @@ class SessionService:
             item.pop("transcript", None)
         return items
 
+    @classmethod
+    def delete_session(cls, session_id: str) -> dict:
+        table = get_table(settings.dynamodb_table_sessions)
+        table.delete_item(Key={"session_id": session_id})
+        return {"deleted": session_id}
+
+    @classmethod
+    def delete_all_sessions(cls) -> dict:
+        table = get_table(settings.dynamodb_table_sessions)
+        resp = table.scan(ProjectionExpression="session_id")
+        items = resp.get("Items", [])
+        while resp.get("LastEvaluatedKey"):
+            resp = table.scan(
+                ProjectionExpression="session_id",
+                ExclusiveStartKey=resp["LastEvaluatedKey"],
+            )
+            items.extend(resp.get("Items", []))
+        with table.batch_writer() as batch:
+            for item in items:
+                batch.delete_item(Key={"session_id": item["session_id"]})
+        return {"deleted": len(items)}
+
     @staticmethod
     def _chunk_text(text: str, max_chars: int = 500) -> list[str]:
         sentences = text.replace("\n", " ").split(". ")

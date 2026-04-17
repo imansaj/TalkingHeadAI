@@ -5,6 +5,7 @@ from enum import Enum
 
 # ── Knowledge Base ──────────────────────────────────────────
 
+
 class KnowledgeEntry(BaseModel):
     question_id: str
     question: str
@@ -26,6 +27,7 @@ class KnowledgeUpdateRequest(BaseModel):
 
 # ── Unanswered Pool ─────────────────────────────────────────
 
+
 class UnansweredEntry(BaseModel):
     question_id: str
     question: str
@@ -35,6 +37,7 @@ class UnansweredEntry(BaseModel):
 
 
 # ── Session Transcripts ─────────────────────────────────────
+
 
 class SessionTranscript(BaseModel):
     session_id: str
@@ -50,6 +53,7 @@ class SessionUploadRequest(BaseModel):
 
 
 # ── Chat ────────────────────────────────────────────────────
+
 
 class ChatRequest(BaseModel):
     text: str | None = None  # text query (alternative to audio)
@@ -68,6 +72,7 @@ class ChatResponse(BaseModel):
 
 
 # ── Admin ───────────────────────────────────────────────────
+
 
 class ReviewAnswerRequest(BaseModel):
     question_id: str

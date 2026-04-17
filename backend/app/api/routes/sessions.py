@@ -23,3 +23,13 @@ async def process_session(session_id: str):
         return SessionService.process_transcript(session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{session_id}")
+async def delete_session(session_id: str):
+    return SessionService.delete_session(session_id)
+
+
+@router.delete("/")
+async def delete_all_sessions():
+    return SessionService.delete_all_sessions()

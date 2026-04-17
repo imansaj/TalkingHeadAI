@@ -224,7 +224,10 @@ class KnowledgeService:
         resp = table.scan(ProjectionExpression="question_id")
         items.extend(resp.get("Items", []))
         while "LastEvaluatedKey" in resp:
-            resp = table.scan(ProjectionExpression="question_id", ExclusiveStartKey=resp["LastEvaluatedKey"])
+            resp = table.scan(
+                ProjectionExpression="question_id",
+                ExclusiveStartKey=resp["LastEvaluatedKey"],
+            )
             items.extend(resp.get("Items", []))
         for item in items:
             table.delete_item(Key={"question_id": item["question_id"]})
@@ -254,7 +257,10 @@ class KnowledgeService:
         resp = table.scan(ProjectionExpression="question_id")
         items.extend(resp.get("Items", []))
         while "LastEvaluatedKey" in resp:
-            resp = table.scan(ProjectionExpression="question_id", ExclusiveStartKey=resp["LastEvaluatedKey"])
+            resp = table.scan(
+                ProjectionExpression="question_id",
+                ExclusiveStartKey=resp["LastEvaluatedKey"],
+            )
             items.extend(resp.get("Items", []))
         for item in items:
             table.delete_item(Key={"question_id": item["question_id"]})

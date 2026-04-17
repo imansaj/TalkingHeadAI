@@ -193,4 +193,18 @@ class ApiService {
     );
     if (resp.statusCode != 200) throw Exception('Failed to process session');
   }
+
+  static Future<void> deleteSession(String sessionId) async {
+    final resp = await http.delete(
+      Uri.parse('$_base/api/sessions/$sessionId'),
+    );
+    if (resp.statusCode != 200) throw Exception('Failed to delete session');
+  }
+
+  static Future<int> deleteAllSessions() async {
+    final resp = await http.delete(Uri.parse('$_base/api/sessions/'));
+    if (resp.statusCode != 200) throw Exception('Failed to delete all sessions');
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return body['deleted'] as int;
+  }
 }
