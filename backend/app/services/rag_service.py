@@ -15,7 +15,7 @@ settings = get_settings()
 
 class RAGService:
     _index: faiss.IndexFlatIP | None = None
-    _metadata: list[dict] = []  # [{question_id, embed_text, context_text}]
+    _metadata: list[dict] = []  # [{question_id, embed_text, context_text, source_type}]
     _dimension: int = 1536  # text-embedding-3-small
 
     @classmethod
@@ -45,19 +45,16 @@ class RAGService:
             cls._index = faiss.read_index(index_file)
             with open(meta_file) as f:
                 raw_meta = json.load(f)
-            # Migrate old format: {question_id, text} -> {question_id, embed_text, context_text}
+            # Migrate old format -> {question_id, embed_text, context_text, source_type}
             cls._metadata = []
             for m in raw_meta:
-                if "embed_text" in m:
-                    cls._metadata.append(m)
-                else:
-                    cls._metadata.append(
-                        {
-                            "question_id": m["question_id"],
-                            "embed_text": m.get("text", ""),
-                            "context_text": m.get("text", ""),
-                        }
-                    )
+                migrated = {
+                    "question_id": m.get("question_id", ""),
+                    "embed_text": m.get("embed_text", m.get("text", "")),
+                    "context_text": m.get("context_text", m.get("text", "")),
+                    "source_type": m.get("source_type", "unknown"),
+                }
+                cls._metadata.append(migrated)
         else:
             cls._index = faiss.IndexFlatIP(cls._dimension)
             cls._metadata = []
@@ -72,7 +69,11 @@ class RAGService:
 
     @classmethod
     def add_entry(
-        cls, question_id: str, embed_text: str, context_text: str | None = None
+        cls,
+        question_id: str,
+        embed_text: str,
+        context_text: str | None = None,
+        source_type: str = "unknown",
     ):
         """Add an entry to the FAISS index.
 
@@ -80,6 +81,7 @@ class RAGService:
             question_id: Unique ID for this entry.
             embed_text: Text to embed for similarity search (typically the question).
             context_text: Text to return as RAG context (typically Q+A). Defaults to embed_text.
+            source_type: Origin of content — "mentor", "session_transcript", or "unanswered".
         """
         vec = cls.embed([embed_text])
         cls._index.add(vec)
@@ -88,6 +90,7 @@ class RAGService:
                 "question_id": question_id,
                 "embed_text": embed_text,
                 "context_text": context_text or embed_text,
+                "source_type": source_type,
             }
         )
         cls.save_index()
@@ -131,6 +134,7 @@ class RAGService:
                     "question_id": entry["question_id"],
                     "text": entry["context_text"],
                     "score": float(score),
+                    "source_type": entry.get("source_type", "unknown"),
                 }
             )
         return results
@@ -168,7 +172,9 @@ class RAGService:
                     chunks.append(current.strip())
                 return chunks
 
-            entries: list[dict] = []  # [{question_id, embed_text, context_text}]
+            entries: list[dict] = (
+                []
+            )  # [{question_id, embed_text, context_text, source_type}]
             seen_questions: dict[str, str] = (
                 {}
             )  # normalized_question -> question_id (dedup)
@@ -188,6 +194,7 @@ class RAGService:
                             "question_id": item["question_id"],
                             "embed_text": q,
                             "context_text": f"Q: {q}\nA: {a}",
+                            "source_type": "mentor",
                         }
                     )
 
@@ -211,6 +218,7 @@ class RAGService:
                             "question_id": item["question_id"],
                             "embed_text": q,
                             "context_text": f"Q: {q}\nA: {a}",
+                            "source_type": "unanswered",
                         }
                     )
 
@@ -225,7 +233,9 @@ class RAGService:
                 title = item.get("title", "")
                 session_id = item.get("session_id", "")
                 if transcript:
-                    chunks = _chunk_text(transcript, max_chars=500)
+                    chunks = _chunk_text(
+                        transcript, max_chars=settings.session_chunk_max_chars
+                    )
                     for i, chunk in enumerate(chunks):
                         chunk_id = f"session_{session_id}_{i}"
                         entries.append(
@@ -233,6 +243,7 @@ class RAGService:
                                 "question_id": chunk_id,
                                 "embed_text": chunk,
                                 "context_text": f"[Session: {title}]\n{chunk}",
+                                "source_type": "session_transcript",
                             }
                         )
                     logger.info(

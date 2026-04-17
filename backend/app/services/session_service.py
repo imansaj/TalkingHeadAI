@@ -69,7 +69,7 @@ class SessionService:
     @classmethod
     def _index_transcript(cls, session_id: str, title: str, transcript: str):
         """Chunk and index a transcript into FAISS."""
-        chunks = cls._chunk_text(transcript, max_chars=500)
+        chunks = cls._chunk_text(transcript, max_chars=settings.session_chunk_max_chars)
         logger.info("[SESSION] Indexing %d chunks for session '%s'", len(chunks), title)
         for i, chunk in enumerate(chunks):
             chunk_id = f"session_{session_id}_{i}"
@@ -77,7 +77,44 @@ class SessionService:
                 chunk_id,
                 embed_text=chunk,
                 context_text=f"[Session: {title}]\n{chunk}",
+                source_type="session_transcript",
             )
+
+    @classmethod
+    def ingest_unprocessed(cls) -> int:
+        """Process all unprocessed session transcripts. Called by the scheduler."""
+        table = get_table(settings.dynamodb_table_sessions)
+        resp = table.scan()
+        items = resp.get("Items", [])
+        count = 0
+        for item in items:
+            if item.get("processed"):
+                continue
+            session_id = item["session_id"]
+            title = item.get("title", "")
+            transcript = item.get("transcript", "")
+            if not transcript:
+                continue
+            try:
+                cls._index_transcript(session_id, title, transcript)
+                table.update_item(
+                    Key={"session_id": session_id},
+                    UpdateExpression="SET processed = :p",
+                    ExpressionAttributeValues={":p": True},
+                )
+                count += 1
+                logger.info(
+                    "[SESSION] Scheduled ingestion processed '%s' (%s)",
+                    title,
+                    session_id,
+                )
+            except Exception:
+                logger.exception(
+                    "[SESSION] Scheduled ingestion failed for '%s' (%s)",
+                    title,
+                    session_id,
+                )
+        return count
 
     @classmethod
     def list_sessions(cls) -> list[dict]:

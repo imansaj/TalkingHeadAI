@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # FAISS
     faiss_index_path: str = "data/faiss_index"
 
+    # Session ingestion
+    session_ingest_interval_minutes: int = 30  # periodic ingestion frequency
+    session_chunk_max_chars: int = 500  # max chars per transcript chunk
+
     # App
     app_title: str = "TalkingHeadAI"
     cors_origins: list[str] = ["*"]

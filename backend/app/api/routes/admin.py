@@ -1,7 +1,11 @@
 from fastapi import APIRouter, HTTPException
 
 from app.services.knowledge_service import KnowledgeService
-from app.models.schemas import ReviewAnswerRequest, ApproveAnswerRequest
+from app.models.schemas import (
+    ReviewAnswerRequest,
+    ApproveAnswerRequest,
+    SessionPromoteRequest,
+)
 
 router = APIRouter()
 
@@ -43,3 +47,9 @@ async def delete_all_unanswered():
     """Delete all unanswered questions."""
     count = KnowledgeService.delete_all_unanswered()
     return {"deleted": count}
+
+
+@router.post("/promote-session")
+async def promote_session_content(req: SessionPromoteRequest):
+    """Promote session-extracted content to mentor-approved knowledge base."""
+    return KnowledgeService.add_knowledge_entry(req.question, req.answer)

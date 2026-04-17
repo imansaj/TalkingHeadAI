@@ -83,3 +83,9 @@ class ReviewAnswerRequest(BaseModel):
 
 class ApproveAnswerRequest(BaseModel):
     question_id: str
+
+
+class SessionPromoteRequest(BaseModel):
+    session_id: str
+    question: str
+    answer: str

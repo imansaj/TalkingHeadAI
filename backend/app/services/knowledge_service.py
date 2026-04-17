@@ -50,26 +50,51 @@ class KnowledgeService:
         match_source = None  # "knowledge" or "unanswered"
         if rag_results:
             logger.info(
-                "[MATCHING] Top result: score=%.4f, q_id=%s, threshold=%.2f",
+                "[MATCHING] Top result: score=%.4f, q_id=%s, source=%s, threshold=%.2f",
                 rag_results[0]["score"],
                 rag_results[0]["question_id"],
+                rag_results[0].get("source_type", "unknown"),
                 SIMILARITY_THRESHOLD,
             )
-        if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
-            q_id = rag_results[0]["question_id"]
-            # Check knowledge table first (approved answers)
+
+        # Priority search: check ALL results above threshold for mentor-approved
+        # KB entries first, rather than only checking the top-1 result.
+        if rag_results:
+            above_threshold = [
+                r for r in rag_results if r["score"] >= SIMILARITY_THRESHOLD
+            ]
+
+            # 1) First pass: look for mentor-approved KB entry among all matches
             table = get_table(settings.dynamodb_table_knowledge)
-            resp = table.get_item(Key={"question_id": q_id})
-            match = resp.get("Item")
-            if match:
-                match_source = "knowledge"
-            else:
-                # Check unanswered table (previously asked but not approved)
+            for r in above_threshold:
+                if r.get("source_type") == "session_transcript":
+                    continue  # skip session chunks — they aren't in KB table
+                resp = table.get_item(Key={"question_id": r["question_id"]})
+                item = resp.get("Item")
+                if item:
+                    match = item
+                    match_source = "knowledge"
+                    logger.info(
+                        "[MATCHING] Found KB match: q_id=%s score=%.4f",
+                        r["question_id"],
+                        r["score"],
+                    )
+                    break
+
+            # 2) Second pass: look for unanswered entry (only if no KB match)
+            if not match:
                 unanswered_table = get_table(settings.dynamodb_table_unanswered)
-                resp = unanswered_table.get_item(Key={"question_id": q_id})
-                match = resp.get("Item")
-                if match:
-                    match_source = "unanswered"
+                for r in above_threshold:
+                    if r.get("source_type") == "session_transcript":
+                        continue
+                    resp = unanswered_table.get_item(
+                        Key={"question_id": r["question_id"]}
+                    )
+                    item = resp.get("Item")
+                    if item:
+                        match = item
+                        match_source = "unanswered"
+                        break
 
         if match and match_source == "knowledge":
             # Case B: Known approved question — use LLM for natural delivery
@@ -142,6 +167,7 @@ class KnowledgeService:
             q_id,
             embed_text=question,
             context_text=f"Q: {question}\nA: {general_response}",
+            source_type="unanswered",
         )
 
         return {
@@ -170,7 +196,10 @@ class KnowledgeService:
 
         # Add to vector index — embed question for matching, store Q+A for context
         RAGService.add_entry(
-            q_id, embed_text=question, context_text=f"Q: {question}\nA: {answer}"
+            q_id,
+            embed_text=question,
+            context_text=f"Q: {question}\nA: {answer}",
+            source_type="mentor",
         )
         return item
 
@@ -195,6 +224,7 @@ class KnowledgeService:
             question_id,
             embed_text=item["question"],
             context_text=f"Q: {item['question']}\nA: {answer}",
+            source_type="mentor",
         )
 
         item["answer"] = answer
