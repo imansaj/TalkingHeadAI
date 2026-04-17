@@ -1,8 +1,11 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from app.services.session_service import SessionService
 from app.models.schemas import SessionUploadRequest
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -23,6 +26,9 @@ async def process_session(session_id: str):
         return SessionService.process_transcript(session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to process session %s", session_id)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{session_id}")

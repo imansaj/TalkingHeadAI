@@ -253,10 +253,13 @@ class ApiService {
   }
 
   static Future<void> processSession(String sessionId) async {
-    final resp = await http.post(
-      Uri.parse('$_base/api/sessions/$sessionId/process'),
-    );
-    if (resp.statusCode != 200) throw Exception('Failed to process session');
+    final resp = await http
+        .post(Uri.parse('$_base/api/sessions/$sessionId/process'))
+        .timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      final body = resp.body;
+      throw Exception('Failed to process session (${resp.statusCode}): $body');
+    }
   }
 
   static Future<void> deleteSession(String sessionId) async {

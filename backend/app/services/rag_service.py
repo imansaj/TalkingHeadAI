@@ -96,6 +96,42 @@ class RAGService:
         cls.save_index()
 
     @classmethod
+    def add_entries_batch(cls, entries: list[dict]):
+        """Add multiple entries in a single embedding call + single save.
+
+        Each entry dict must have: question_id, embed_text, context_text, source_type.
+        """
+        if not entries:
+            return
+        texts = [e["embed_text"] for e in entries]
+        vecs = cls.embed(texts)
+        cls._index.add(vecs)
+        for e in entries:
+            cls._metadata.append(
+                {
+                    "question_id": e["question_id"],
+                    "embed_text": e["embed_text"],
+                    "context_text": e.get("context_text", e["embed_text"]),
+                    "source_type": e.get("source_type", "unknown"),
+                }
+            )
+        cls.save_index()
+
+    @classmethod
+    def remove_entries_by_prefix(cls, prefix: str):
+        """Remove all entries whose question_id starts with the given prefix."""
+        new_meta = [m for m in cls._metadata if not m["question_id"].startswith(prefix)]
+        if len(new_meta) == len(cls._metadata):
+            return
+        cls._metadata = new_meta
+        cls._index = faiss.IndexFlatIP(cls._dimension)
+        if cls._metadata:
+            texts = [m["embed_text"] for m in cls._metadata]
+            vecs = cls.embed(texts)
+            cls._index.add(vecs)
+        cls.save_index()
+
+    @classmethod
     def remove_entry(cls, question_id: str):
         """Rebuild index without the given question_id."""
         new_meta = [m for m in cls._metadata if m["question_id"] != question_id]

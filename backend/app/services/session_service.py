@@ -55,6 +55,9 @@ class SessionService:
         if not item:
             raise ValueError("Session not found")
 
+        # Remove old chunks for this session before re-indexing
+        RAGService.remove_entries_by_prefix(f"session_{session_id}_")
+
         cls._index_transcript(session_id, item["title"], item["transcript"])
 
         table.update_item(
@@ -68,17 +71,21 @@ class SessionService:
 
     @classmethod
     def _index_transcript(cls, session_id: str, title: str, transcript: str):
-        """Chunk and index a transcript into FAISS."""
+        """Chunk and index a transcript into FAISS (batch embedding)."""
         chunks = cls._chunk_text(transcript, max_chars=settings.session_chunk_max_chars)
         logger.info("[SESSION] Indexing %d chunks for session '%s'", len(chunks), title)
+        entries = []
         for i, chunk in enumerate(chunks):
             chunk_id = f"session_{session_id}_{i}"
-            RAGService.add_entry(
-                chunk_id,
-                embed_text=chunk,
-                context_text=f"[Session: {title}]\n{chunk}",
-                source_type="session_transcript",
+            entries.append(
+                {
+                    "question_id": chunk_id,
+                    "embed_text": chunk,
+                    "context_text": f"[Session: {title}]\n{chunk}",
+                    "source_type": "session_transcript",
+                }
             )
+        RAGService.add_entries_batch(entries)
 
     @classmethod
     def ingest_unprocessed(cls) -> int:

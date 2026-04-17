@@ -25,15 +25,15 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _audioUnlocked = false;
 
   /// Unlock audio playback on mobile browsers (must happen inside a user gesture).
-  void _ensureAudioUnlocked() {
+  Future<void> _ensureAudioUnlocked() async {
     if (!_audioUnlocked) {
       _audioUnlocked = true;
-      AudioService.unlockAudio();
+      await AudioService.unlockAudio();
     }
   }
 
-  void _send() {
-    _ensureAudioUnlocked();
+  void _send() async {
+    await _ensureAudioUnlocked();
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
@@ -53,7 +53,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _toggleRecording() async {
-    _ensureAudioUnlocked();
+    await _ensureAudioUnlocked();
     if (_isRecording) {
       // Stop recording — returns a blob URL on web
       final path = await _recorder.stop();
