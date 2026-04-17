@@ -19,3 +19,18 @@ async def review_question(req: ReviewAnswerRequest):
         return KnowledgeService.review_unanswered(req.question_id, req.answer)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/unanswered/{question_id}")
+async def delete_unanswered(question_id: str):
+    """Delete a single unanswered question."""
+    if not KnowledgeService.delete_unanswered_entry(question_id):
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return {"deleted": question_id}
+
+
+@router.delete("/unanswered")
+async def delete_all_unanswered():
+    """Delete all unanswered questions."""
+    count = KnowledgeService.delete_all_unanswered()
+    return {"deleted": count}

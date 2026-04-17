@@ -119,6 +119,20 @@ class ApiService {
     if (resp.statusCode != 200) throw Exception('Failed to update entry');
   }
 
+  static Future<void> deleteKnowledge(String questionId) async {
+    final resp = await http.delete(
+      Uri.parse('$_base/api/knowledge/$questionId'),
+    );
+    if (resp.statusCode != 200) throw Exception('Failed to delete entry');
+  }
+
+  static Future<int> deleteAllKnowledge() async {
+    final resp = await http.delete(Uri.parse('$_base/api/knowledge/'));
+    if (resp.statusCode != 200) throw Exception('Failed to delete all');
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return body['deleted'] as int;
+  }
+
   // ── Admin / Unanswered ────────────────────────────
 
   static Future<List<UnansweredEntry>> listUnanswered() async {
@@ -135,6 +149,20 @@ class ApiService {
       body: jsonEncode({'question_id': questionId, 'answer': answer}),
     );
     if (resp.statusCode != 200) throw Exception('Failed to review question');
+  }
+
+  static Future<void> deleteUnanswered(String questionId) async {
+    final resp = await http.delete(
+      Uri.parse('$_base/api/admin/unanswered/$questionId'),
+    );
+    if (resp.statusCode != 200) throw Exception('Failed to delete entry');
+  }
+
+  static Future<int> deleteAllUnanswered() async {
+    final resp = await http.delete(Uri.parse('$_base/api/admin/unanswered'));
+    if (resp.statusCode != 200) throw Exception('Failed to delete all');
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return body['deleted'] as int;
   }
 
   // ── Sessions ──────────────────────────────────────

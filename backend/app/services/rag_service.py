@@ -51,11 +51,13 @@ class RAGService:
                 if "embed_text" in m:
                     cls._metadata.append(m)
                 else:
-                    cls._metadata.append({
-                        "question_id": m["question_id"],
-                        "embed_text": m.get("text", ""),
-                        "context_text": m.get("text", ""),
-                    })
+                    cls._metadata.append(
+                        {
+                            "question_id": m["question_id"],
+                            "embed_text": m.get("text", ""),
+                            "context_text": m.get("text", ""),
+                        }
+                    )
         else:
             cls._index = faiss.IndexFlatIP(cls._dimension)
             cls._metadata = []
@@ -69,7 +71,9 @@ class RAGService:
             json.dump(cls._metadata, f)
 
     @classmethod
-    def add_entry(cls, question_id: str, embed_text: str, context_text: str | None = None):
+    def add_entry(
+        cls, question_id: str, embed_text: str, context_text: str | None = None
+    ):
         """Add an entry to the FAISS index.
 
         Args:
@@ -79,11 +83,13 @@ class RAGService:
         """
         vec = cls.embed([embed_text])
         cls._index.add(vec)
-        cls._metadata.append({
-            "question_id": question_id,
-            "embed_text": embed_text,
-            "context_text": context_text or embed_text,
-        })
+        cls._metadata.append(
+            {
+                "question_id": question_id,
+                "embed_text": embed_text,
+                "context_text": context_text or embed_text,
+            }
+        )
         cls.save_index()
 
     @classmethod
@@ -105,7 +111,9 @@ class RAGService:
     @classmethod
     def search(cls, query: str, top_k: int = 5) -> list[dict]:
         # Lazy rebuild: if index is empty and we haven't tried yet, rebuild from DB
-        if (cls._index is None or cls._index.ntotal == 0) and not cls._rebuild_attempted:
+        if (
+            cls._index is None or cls._index.ntotal == 0
+        ) and not cls._rebuild_attempted:
             logger.info("[RAG] Index empty at search time — triggering lazy rebuild")
             cls.rebuild_from_db()
         if cls._index is None or cls._index.ntotal == 0:
@@ -118,11 +126,13 @@ class RAGService:
             if idx < 0:
                 continue
             entry = cls._metadata[idx]
-            results.append({
-                "question_id": entry["question_id"],
-                "text": entry["context_text"],
-                "score": float(score),
-            })
+            results.append(
+                {
+                    "question_id": entry["question_id"],
+                    "text": entry["context_text"],
+                    "score": float(score),
+                }
+            )
         return results
 
     @classmethod
@@ -145,7 +155,9 @@ class RAGService:
                 return items
 
             entries: list[dict] = []  # [{question_id, embed_text, context_text}]
-            seen_questions: dict[str, str] = {}  # normalized_question -> question_id (dedup)
+            seen_questions: dict[str, str] = (
+                {}
+            )  # normalized_question -> question_id (dedup)
 
             # 1) Knowledge table
             kb_table = get_table(settings.dynamodb_table_knowledge)
@@ -157,11 +169,13 @@ class RAGService:
                 if q:
                     norm = q.strip().lower()
                     seen_questions[norm] = item["question_id"]
-                    entries.append({
-                        "question_id": item["question_id"],
-                        "embed_text": q,
-                        "context_text": f"Q: {q}\nA: {a}",
-                    })
+                    entries.append(
+                        {
+                            "question_id": item["question_id"],
+                            "embed_text": q,
+                            "context_text": f"Q: {q}\nA: {a}",
+                        }
+                    )
 
             # 2) Unanswered table (pending only — reviewed ones are in knowledge)
             ua_table = get_table(settings.dynamodb_table_unanswered)
@@ -178,23 +192,28 @@ class RAGService:
                         # Skip duplicate — already have this question in the index
                         continue
                     seen_questions[norm] = item["question_id"]
-                    entries.append({
-                        "question_id": item["question_id"],
-                        "embed_text": q,
-                        "context_text": f"Q: {q}\nA: {a}",
-                    })
+                    entries.append(
+                        {
+                            "question_id": item["question_id"],
+                            "embed_text": q,
+                            "context_text": f"Q: {q}\nA: {a}",
+                        }
+                    )
 
             if not entries:
                 logger.info("[RAG] No DB entries to rebuild index from")
                 return
 
-            logger.info("[RAG] Rebuilding FAISS index from %d unique entries (deduped)", len(entries))
+            logger.info(
+                "[RAG] Rebuilding FAISS index from %d unique entries (deduped)",
+                len(entries),
+            )
 
             # Batch embed — chunk to avoid OpenAI rate limits
             BATCH_SIZE = 100
             all_vecs = []
             for i in range(0, len(entries), BATCH_SIZE):
-                batch_texts = [e["embed_text"] for e in entries[i:i + BATCH_SIZE]]
+                batch_texts = [e["embed_text"] for e in entries[i : i + BATCH_SIZE]]
                 batch_vecs = cls.embed(batch_texts)
                 all_vecs.append(batch_vecs)
                 logger.info("[RAG] Embedded batch %d-%d", i, i + len(batch_texts))
@@ -204,6 +223,8 @@ class RAGService:
             cls._index.add(vecs)
             cls._metadata = entries
             cls.save_index()
-            logger.info("[RAG] FAISS index rebuilt successfully: %d vectors", cls._index.ntotal)
+            logger.info(
+                "[RAG] FAISS index rebuilt successfully: %d vectors", cls._index.ntotal
+            )
         except Exception:
             logger.exception("[RAG] Failed to rebuild FAISS index from DB")

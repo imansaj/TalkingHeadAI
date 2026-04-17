@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Sentence-end pattern: .!? followed by space or end
-_SENTENCE_END = re.compile(r'[.!?…]\s*$')
+_SENTENCE_END = re.compile(r"[.!?…]\s*$")
 
 
 @router.get("/debug-search")
@@ -97,7 +97,11 @@ async def chat_stream(req: ChatRequest):
             logger.info("[STREAM] Starting RAG search for: %s", question[:80])
             t_rag = time.time()
             rag_results = RAGService.search(question, top_k=5)
-            logger.info("[STREAM] RAG search done in %.2fs, results=%d", time.time() - t_rag, len(rag_results))
+            logger.info(
+                "[STREAM] RAG search done in %.2fs, results=%d",
+                time.time() - t_rag,
+                len(rag_results),
+            )
 
             match = None
             match_source = None
@@ -105,7 +109,11 @@ async def chat_stream(req: ChatRequest):
 
             if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
                 q_id = rag_results[0]["question_id"]
-                logger.info("[STREAM] Top match: q_id=%s, score=%.4f", q_id, rag_results[0]["score"])
+                logger.info(
+                    "[STREAM] Top match: q_id=%s, score=%.4f",
+                    q_id,
+                    rag_results[0]["score"],
+                )
                 table = get_table(settings.dynamodb_table_knowledge)
                 resp = table.get_item(Key={"question_id": q_id})
                 match = resp.get("Item")
@@ -120,10 +128,17 @@ async def chat_stream(req: ChatRequest):
                         match_source = "unanswered"
                         logger.info("[STREAM] Matched unanswered entry")
                     else:
-                        logger.info("[STREAM] q_id=%s not found in knowledge or unanswered tables (session chunk?)", q_id)
+                        logger.info(
+                            "[STREAM] q_id=%s not found in knowledge or unanswered tables (session chunk?)",
+                            q_id,
+                        )
             else:
                 if rag_results:
-                    logger.info("[STREAM] Top score %.4f below threshold %.2f", rag_results[0]["score"], SIMILARITY_THRESHOLD)
+                    logger.info(
+                        "[STREAM] Top score %.4f below threshold %.2f",
+                        rag_results[0]["score"],
+                        SIMILARITY_THRESHOLD,
+                    )
                 else:
                     logger.info("[STREAM] No RAG results")
 
@@ -137,11 +152,15 @@ async def chat_stream(req: ChatRequest):
                     ExpressionAttributeValues={":c": Decimal(str(new_count))},
                 )
 
-                yield _sse_event("meta", {"answer_type": "known", "times_asked": new_count})
+                yield _sse_event(
+                    "meta", {"answer_type": "known", "times_asked": new_count}
+                )
 
                 prefix = f"{new_count} people have asked this question. "
                 prefix_audio = _tts(client, prefix)
-                yield _sse_event("sentence", {"text": prefix, "audio_base64": prefix_audio})
+                yield _sse_event(
+                    "sentence", {"text": prefix, "audio_base64": prefix_audio}
+                )
 
                 sentence_buffer = ""
                 full_text_parts = [prefix]
@@ -154,31 +173,50 @@ async def chat_stream(req: ChatRequest):
                     full_text_parts.append(token)
                     sentence_buffer += token
 
-                    if _SENTENCE_END.search(sentence_buffer) and len(sentence_buffer) >= 20:
+                    if (
+                        _SENTENCE_END.search(sentence_buffer)
+                        and len(sentence_buffer) >= 20
+                    ):
                         audio_b64 = _tts(client, sentence_buffer.strip())
-                        yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+                        yield _sse_event(
+                            "sentence",
+                            {"text": sentence_buffer, "audio_base64": audio_b64},
+                        )
                         sentence_buffer = ""
 
                 if sentence_buffer.strip():
                     audio_b64 = _tts(client, sentence_buffer.strip())
-                    yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+                    yield _sse_event(
+                        "sentence", {"text": sentence_buffer, "audio_base64": audio_b64}
+                    )
 
                 full_text = "".join(full_text_parts)
-                yield _sse_event("done", {
-                    "answer_type": "known",
-                    "times_asked": new_count,
-                    "full_text": full_text,
-                })
+                yield _sse_event(
+                    "done",
+                    {
+                        "answer_type": "known",
+                        "times_asked": new_count,
+                        "full_text": full_text,
+                    },
+                )
                 return
 
             # --- Case C: Previously asked unanswered ---
             if match and match_source == "unanswered":
-                yield _sse_event("meta", {"answer_type": "repeated", "times_asked": None})
+                # Still "new" per requirements (not in knowledge base yet)
+                logger.info("[STREAM] Case C: repeated unanswered — treating as new")
+                yield _sse_event("meta", {"answer_type": "new", "times_asked": None})
 
-                # Stream a fresh LLM response using RAG context (no "new question" prefix)
+                prefix = "This is a new question. I will give you a general response. "
+                prefix_audio = _tts(client, prefix)
+                yield _sse_event(
+                    "sentence", {"text": prefix, "audio_base64": prefix_audio}
+                )
+
+                # Stream a fresh LLM response using RAG context
                 context_chunks = [r["text"] for r in rag_results]
                 sentence_buffer = ""
-                full_text_parts = []
+                full_text_parts = [prefix]
 
                 for token in LLMService.generate_response_stream(
                     question=question,
@@ -188,21 +226,32 @@ async def chat_stream(req: ChatRequest):
                     full_text_parts.append(token)
                     sentence_buffer += token
 
-                    if _SENTENCE_END.search(sentence_buffer) and len(sentence_buffer) >= 20:
+                    if (
+                        _SENTENCE_END.search(sentence_buffer)
+                        and len(sentence_buffer) >= 20
+                    ):
                         audio_b64 = _tts(client, sentence_buffer.strip())
-                        yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+                        yield _sse_event(
+                            "sentence",
+                            {"text": sentence_buffer, "audio_base64": audio_b64},
+                        )
                         sentence_buffer = ""
 
                 if sentence_buffer.strip():
                     audio_b64 = _tts(client, sentence_buffer.strip())
-                    yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+                    yield _sse_event(
+                        "sentence", {"text": sentence_buffer, "audio_base64": audio_b64}
+                    )
 
                 full_text = "".join(full_text_parts)
-                yield _sse_event("done", {
-                    "answer_type": "repeated",
-                    "times_asked": None,
-                    "full_text": full_text,
-                })
+                yield _sse_event(
+                    "done",
+                    {
+                        "answer_type": "new",
+                        "times_asked": None,
+                        "full_text": full_text,
+                    },
+                )
                 return
 
             # --- Case A: New question — stream LLM + sentence-level TTS ---
@@ -221,7 +270,11 @@ async def chat_stream(req: ChatRequest):
             sentence_buffer = ""
             full_text_parts = [prefix]
 
-            logger.info("[STREAM] Starting LLM stream (model=%s, context_chunks=%d)...", settings.openai_model, len(context_chunks))
+            logger.info(
+                "[STREAM] Starting LLM stream (model=%s, context_chunks=%d)...",
+                settings.openai_model,
+                len(context_chunks),
+            )
             t_llm = time.time()
             token_count = 0
             for token in LLMService.generate_response_stream(
@@ -235,21 +288,30 @@ async def chat_stream(req: ChatRequest):
 
                 if _SENTENCE_END.search(sentence_buffer) and len(sentence_buffer) >= 20:
                     audio_b64 = _tts(client, sentence_buffer.strip())
-                    yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+                    yield _sse_event(
+                        "sentence", {"text": sentence_buffer, "audio_base64": audio_b64}
+                    )
                     sentence_buffer = ""
 
-            logger.info("[STREAM] LLM stream done in %.2fs, tokens=%d", time.time() - t_llm, token_count)
+            logger.info(
+                "[STREAM] LLM stream done in %.2fs, tokens=%d",
+                time.time() - t_llm,
+                token_count,
+            )
 
             if sentence_buffer.strip():
                 audio_b64 = _tts(client, sentence_buffer.strip())
-                yield _sse_event("sentence", {"text": sentence_buffer, "audio_base64": audio_b64})
+                yield _sse_event(
+                    "sentence", {"text": sentence_buffer, "audio_base64": audio_b64}
+                )
 
             full_text = "".join(full_text_parts)
 
             import uuid
             from datetime import datetime
+
             q_id = str(uuid.uuid4())
-            general_response = full_text[len(prefix):]
+            general_response = full_text[len(prefix) :]
             unanswered_table = get_table(settings.dynamodb_table_unanswered)
             unanswered_table.put_item(
                 Item={
@@ -260,16 +322,23 @@ async def chat_stream(req: ChatRequest):
                     "status": "pending",
                 }
             )
-            RAGService.add_entry(q_id, embed_text=question, context_text=f"Q: {question}\nA: {general_response}")
+            RAGService.add_entry(
+                q_id,
+                embed_text=question,
+                context_text=f"Q: {question}\nA: {general_response}",
+            )
 
             t1 = time.time()
             logger.info("[TIMING] Streaming total: %.2fs", t1 - t0)
 
-            yield _sse_event("done", {
-                "answer_type": "new",
-                "times_asked": None,
-                "full_text": full_text,
-            })
+            yield _sse_event(
+                "done",
+                {
+                    "answer_type": "new",
+                    "times_asked": None,
+                    "full_text": full_text,
+                },
+            )
 
         except Exception as e:
             logger.exception("Stream error")

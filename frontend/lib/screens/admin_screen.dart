@@ -96,6 +96,66 @@ class _UnansweredTabState extends State<_UnansweredTab> {
     if (mounted) setState(() => _loading = false);
   }
 
+  Future<void> _confirmDelete(UnansweredEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF18181B),
+        title: const Text('Delete Entry', style: TextStyle(color: Color(0xFFFAFAFA))),
+        content: Text(
+          'Delete "${entry.question}"?',
+          style: const TextStyle(color: Color(0xFFA1A1AA)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Color(0xFF71717A)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      try {
+        await ApiService.deleteUnanswered(entry.questionId);
+        _load();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF18181B),
+        title: const Text('Delete All Unanswered', style: TextStyle(color: Color(0xFFFAFAFA))),
+        content: Text(
+          'Delete all ${_entries.length} unanswered entries? This cannot be undone.',
+          style: const TextStyle(color: Color(0xFFA1A1AA)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Color(0xFF71717A)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete All'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      try {
+        await ApiService.deleteAllUnanswered();
+        _load();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   void _showReviewDialog(UnansweredEntry entry) {
     final answerController = TextEditingController();
     showDialog(
@@ -250,62 +310,117 @@ class _UnansweredTabState extends State<_UnansweredTab> {
     return RefreshIndicator(
       color: const Color(0xFF3B82F6),
       onRefresh: _load,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _entries.length,
-        itemBuilder: (_, i) {
-          final e = _entries[i];
-          return Card(
-            color: const Color(0xFF18181B),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Color(0xFF27272A)),
-            ),
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 6,
-              ),
-              title: Text(
-                e.question,
-                style: const TextStyle(color: Color(0xFFFAFAFA), fontSize: 14),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'Asked: ${e.createdAt}',
-                  style: const TextStyle(
-                    color: Color(0xFF52525B),
-                    fontSize: 12,
-                  ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${_entries.length} entries',
+                  style: const TextStyle(color: Color(0xFF52525B)),
                 ),
-              ),
-              trailing: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF59E0B),
-                  foregroundColor: const Color(0xFF09090B),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC2626),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                  ),
+                  icon: const Icon(Icons.delete_sweep, size: 18),
+                  label: const Text(
+                    'Delete All',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: _confirmDeleteAll,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _entries.length,
+              itemBuilder: (_, i) {
+                final e = _entries[i];
+                return Card(
+                  color: const Color(0xFF18181B),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Color(0xFF27272A)),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    title: Text(
+                      e.question,
+                      style: const TextStyle(
+                        color: Color(0xFFFAFAFA),
+                        fontSize: 14,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Asked: ${e.createdAt}',
+                        style: const TextStyle(
+                          color: Color(0xFF52525B),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Color(0xFFDC2626),
+                            size: 20,
+                          ),
+                          onPressed: () => _confirmDelete(e),
+                          tooltip: 'Delete',
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF59E0B),
+                            foregroundColor: const Color(0xFF09090B),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                          ),
+                          onPressed: () => _showReviewDialog(e),
+                          child: const Text(
+                            'Review',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                onPressed: () => _showReviewDialog(e),
-                child: const Text(
-                  'Review',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -342,6 +457,66 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
       }
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _confirmDeleteEntry(KnowledgeEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF18181B),
+        title: const Text('Delete Entry', style: TextStyle(color: Color(0xFFFAFAFA))),
+        content: Text(
+          'Delete "${entry.question}"?',
+          style: const TextStyle(color: Color(0xFFA1A1AA)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Color(0xFF71717A)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      try {
+        await ApiService.deleteKnowledge(entry.questionId);
+        _load();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteAllKnowledge() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF18181B),
+        title: const Text('Delete All Knowledge', style: TextStyle(color: Color(0xFFFAFAFA))),
+        content: Text(
+          'Delete all ${_entries.length} knowledge entries? This cannot be undone.',
+          style: const TextStyle(color: Color(0xFFA1A1AA)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Color(0xFF71717A)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete All'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      try {
+        await ApiService.deleteAllKnowledge();
+        _load();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
   }
 
   void _showAddDialog() {
@@ -487,25 +662,53 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                 '${_entries.length} entries',
                 style: const TextStyle(color: const Color(0xFF52525B)),
               ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+              Row(
+                children: [
+                  if (_entries.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                        ),
+                        icon: const Icon(Icons.delete_sweep, size: 18),
+                        label: const Text(
+                          'Delete All',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: _confirmDeleteAllKnowledge,
+                      ),
+                    ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3B82F6),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                    ),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text(
+                      'Add Entry',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    onPressed: _showAddDialog,
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                ),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text(
-                  'Add Entry',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                onPressed: _showAddDialog,
+                ],
               ),
             ],
           ),
@@ -573,6 +776,16 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                                 _CopyIconButton(
                                   text: e.answer,
                                   label: 'Answer',
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Color(0xFFDC2626),
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _confirmDeleteEntry(e),
+                                  tooltip: 'Delete',
                                 ),
                               ],
                             ),

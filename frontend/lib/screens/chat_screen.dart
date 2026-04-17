@@ -337,8 +337,6 @@ class _MessageBubble extends StatelessWidget {
       case 'known':
         final count = timesAsked != null ? ' · Asked $timesAsked times' : '';
         return '📚 Known Answer$count';
-      case 'repeated':
-        return '🔁 Repeated Question';
       default:
         return answerType;
     }
@@ -350,8 +348,6 @@ class _MessageBubble extends StatelessWidget {
         return const Color(0xFFF59E0B);
       case 'known':
         return const Color(0xFF38BDF8);
-      case 'repeated':
-        return const Color(0xFF8B5CF6);
       default:
         return const Color(0xFF71717A);
     }

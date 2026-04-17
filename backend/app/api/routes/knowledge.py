@@ -22,3 +22,16 @@ async def update_knowledge(question_id: str, req: KnowledgeUpdateRequest):
     if not result:
         raise HTTPException(status_code=404, detail="Entry not found")
     return result
+
+
+@router.delete("/{question_id}")
+async def delete_knowledge(question_id: str):
+    if not KnowledgeService.delete_knowledge_entry(question_id):
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return {"deleted": question_id}
+
+
+@router.delete("/")
+async def delete_all_knowledge():
+    count = KnowledgeService.delete_all_knowledge()
+    return {"deleted": count}

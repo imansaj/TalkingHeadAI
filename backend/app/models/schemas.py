@@ -58,7 +58,6 @@ class ChatRequest(BaseModel):
 class AnswerType(str, Enum):
     NEW = "new"
     KNOWN = "known"
-    REPEATED = "repeated"
 
 
 class ChatResponse(BaseModel):
