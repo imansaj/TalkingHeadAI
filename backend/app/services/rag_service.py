@@ -134,16 +134,29 @@ class RAGService:
 
             settings = get_settings()
 
+            def _scan_all(table):
+                """Paginated DynamoDB scan — returns all items."""
+                items = []
+                resp = table.scan()
+                items.extend(resp.get("Items", []))
+                while "LastEvaluatedKey" in resp:
+                    resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+                    items.extend(resp.get("Items", []))
+                return items
+
             entries: list[dict] = []  # [{question_id, embed_text, context_text}]
+            seen_questions: dict[str, str] = {}  # normalized_question -> question_id (dedup)
 
             # 1) Knowledge table
             kb_table = get_table(settings.dynamodb_table_knowledge)
-            kb_items = kb_table.scan().get("Items", [])
+            kb_items = _scan_all(kb_table)
             logger.info("[RAG] Found %d knowledge entries in DB", len(kb_items))
             for item in kb_items:
                 q = item.get("question", "")
                 a = item.get("answer", "")
                 if q:
+                    norm = q.strip().lower()
+                    seen_questions[norm] = item["question_id"]
                     entries.append({
                         "question_id": item["question_id"],
                         "embed_text": q,
@@ -152,7 +165,7 @@ class RAGService:
 
             # 2) Unanswered table (pending only — reviewed ones are in knowledge)
             ua_table = get_table(settings.dynamodb_table_unanswered)
-            ua_items = ua_table.scan().get("Items", [])
+            ua_items = _scan_all(ua_table)
             logger.info("[RAG] Found %d unanswered entries in DB", len(ua_items))
             for item in ua_items:
                 if item.get("status") != "pending":
@@ -160,6 +173,11 @@ class RAGService:
                 q = item.get("question", "")
                 a = item.get("general_response", "")
                 if q:
+                    norm = q.strip().lower()
+                    if norm in seen_questions:
+                        # Skip duplicate — already have this question in the index
+                        continue
+                    seen_questions[norm] = item["question_id"]
                     entries.append({
                         "question_id": item["question_id"],
                         "embed_text": q,
@@ -170,7 +188,7 @@ class RAGService:
                 logger.info("[RAG] No DB entries to rebuild index from")
                 return
 
-            logger.info("[RAG] Rebuilding FAISS index from %d DB entries", len(entries))
+            logger.info("[RAG] Rebuilding FAISS index from %d unique entries (deduped)", len(entries))
 
             # Batch embed — chunk to avoid OpenAI rate limits
             BATCH_SIZE = 100

@@ -93,13 +93,9 @@ class KnowledgeService:
                 context_chunks=context_chunks,
                 is_new=True,
             )
-            full_response = (
-                "This is a new question. I will give you a general response. "
-                + general_response
-            )
             return {
-                "answer_type": AnswerType.NEW,
-                "text": full_response,
+                "answer_type": AnswerType.REPEATED,
+                "text": general_response,
                 "times_asked": None,
             }
 

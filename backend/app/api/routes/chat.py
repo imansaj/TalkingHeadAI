@@ -173,16 +173,12 @@ async def chat_stream(req: ChatRequest):
 
             # --- Case C: Previously asked unanswered ---
             if match and match_source == "unanswered":
-                yield _sse_event("meta", {"answer_type": "new", "times_asked": None})
+                yield _sse_event("meta", {"answer_type": "repeated", "times_asked": None})
 
-                prefix = "This is a new question. I will give you a general response. "
-                prefix_audio = _tts(client, prefix)
-                yield _sse_event("sentence", {"text": prefix, "audio_base64": prefix_audio})
-
-                # Stream a fresh LLM response using RAG context
+                # Stream a fresh LLM response using RAG context (no "new question" prefix)
                 context_chunks = [r["text"] for r in rag_results]
                 sentence_buffer = ""
-                full_text_parts = [prefix]
+                full_text_parts = []
 
                 for token in LLMService.generate_response_stream(
                     question=question,
@@ -203,7 +199,7 @@ async def chat_stream(req: ChatRequest):
 
                 full_text = "".join(full_text_parts)
                 yield _sse_event("done", {
-                    "answer_type": "new",
+                    "answer_type": "repeated",
                     "times_asked": None,
                     "full_text": full_text,
                 })
