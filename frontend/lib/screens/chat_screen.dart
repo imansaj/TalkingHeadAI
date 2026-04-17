@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:record/record.dart';
 import '../models.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/talking_head_widget.dart';
@@ -15,6 +18,10 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  final _recorder = AudioRecorder();
+  bool _isRecording = false;
+  StreamSubscription<Uint8List>? _recordSub;
+  final List<Uint8List> _audioChunks = [];
 
   void _send() {
     final text = _controller.text.trim();
@@ -33,6 +40,53 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     });
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_isRecording) {
+      // Stop and send
+      await _recordSub?.cancel();
+      await _recorder.stop();
+      setState(() => _isRecording = false);
+
+      if (_audioChunks.isNotEmpty) {
+        final totalLength = _audioChunks.fold<int>(
+          0,
+          (sum, c) => sum + c.length,
+        );
+        final combined = Uint8List(totalLength);
+        var offset = 0;
+        for (final chunk in _audioChunks) {
+          combined.setRange(offset, offset + chunk.length, chunk);
+          offset += chunk.length;
+        }
+        _audioChunks.clear();
+        if (combined.isNotEmpty) {
+          context.read<ChatProvider>().sendVoice(combined);
+        }
+      }
+    } else {
+      // Start recording via stream (web-compatible)
+      if (await _recorder.hasPermission()) {
+        _audioChunks.clear();
+        final stream = await _recorder.startStream(
+          const RecordConfig(encoder: AudioEncoder.opus),
+        );
+        _recordSub = stream.listen((data) {
+          _audioChunks.add(data);
+        });
+        setState(() => _isRecording = true);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _recordSub?.cancel();
+    _recorder.dispose();
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -227,6 +281,19 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         ),
                         onSubmitted: (_) => _send(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    CircleAvatar(
+                      backgroundColor: _isRecording
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFF27272A),
+                      child: IconButton(
+                        icon: Icon(
+                          _isRecording ? Icons.stop : Icons.mic,
+                          color: Colors.white,
+                        ),
+                        onPressed: _toggleRecording,
                       ),
                     ),
                     const SizedBox(width: 8),

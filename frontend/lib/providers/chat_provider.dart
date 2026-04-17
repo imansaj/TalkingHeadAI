@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../models.dart';
 import '../services/api_service.dart';
@@ -154,6 +155,46 @@ class ChatProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       _isStreaming = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> sendVoice(Uint8List audioBytes) async {
+    _messages.add(ChatMessage(text: '🎤 Voice message', isUser: true));
+    _isLoading = true;
+    notifyListeners();
+
+    final myGeneration = ++_audioGeneration;
+    _syncQueue.clear();
+
+    try {
+      final response = await ApiService.chatVoice(audioBytes);
+
+      if (_audioGeneration != myGeneration) return;
+
+      _messages.add(
+        ChatMessage(
+          text: response.text,
+          isUser: false,
+          answerType: response.answerType,
+          timesAsked: response.timesAsked,
+        ),
+      );
+      notifyListeners();
+
+      if (response.audioBase64 != null && response.audioBase64!.isNotEmpty) {
+        _isSpeaking = true;
+        notifyListeners();
+        await AudioService.playBase64Audio(response.audioBase64!);
+        if (_audioGeneration == myGeneration) {
+          _isSpeaking = false;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      _messages.add(ChatMessage(text: 'Error: $e', isUser: false));
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }

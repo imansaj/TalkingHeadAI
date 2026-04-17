@@ -154,6 +154,20 @@ class RAGService:
                     items.extend(resp.get("Items", []))
                 return items
 
+            def _chunk_text(text: str, max_chars: int = 500) -> list[str]:
+                """Split text into chunks at sentence boundaries."""
+                sentences = text.replace("\n", " ").split(". ")
+                chunks, current = [], ""
+                for s in sentences:
+                    if len(current) + len(s) + 2 > max_chars and current:
+                        chunks.append(current.strip())
+                        current = s + ". "
+                    else:
+                        current += s + ". "
+                if current.strip():
+                    chunks.append(current.strip())
+                return chunks
+
             entries: list[dict] = []  # [{question_id, embed_text, context_text}]
             seen_questions: dict[str, str] = (
                 {}
@@ -198,6 +212,33 @@ class RAGService:
                             "embed_text": q,
                             "context_text": f"Q: {q}\nA: {a}",
                         }
+                    )
+
+            # 3) Sessions table — re-index transcript chunks
+            sess_table = get_table(settings.dynamodb_table_sessions)
+            sess_items = _scan_all(sess_table)
+            logger.info("[RAG] Found %d sessions in DB", len(sess_items))
+            for item in sess_items:
+                if not item.get("processed"):
+                    continue
+                transcript = item.get("transcript", "")
+                title = item.get("title", "")
+                session_id = item.get("session_id", "")
+                if transcript:
+                    chunks = _chunk_text(transcript, max_chars=500)
+                    for i, chunk in enumerate(chunks):
+                        chunk_id = f"session_{session_id}_{i}"
+                        entries.append(
+                            {
+                                "question_id": chunk_id,
+                                "embed_text": chunk,
+                                "context_text": f"[Session: {title}]\n{chunk}",
+                            }
+                        )
+                    logger.info(
+                        "[RAG] Added %d chunks from session '%s'",
+                        len(chunks),
+                        title,
                     )
 
             if not entries:

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models.dart';
@@ -93,6 +94,28 @@ class ApiService {
   }
 
   // ── Knowledge Base ────────────────────────────────
+
+  static Future<ChatResponse> chatVoice(Uint8List audioBytes) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_base/api/chat/voice'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'audio',
+        audioBytes,
+        filename: 'recording.webm',
+      ),
+    );
+    final streamed = await request.send().timeout(const Duration(seconds: 120));
+    final resp = await http.Response.fromStream(streamed);
+    if (resp.statusCode != 200) {
+      throw Exception('Voice chat failed (${resp.statusCode}): ${resp.body}');
+    }
+    return ChatResponse.fromJson(jsonDecode(resp.body));
+  }
+
+  // ── Knowledge Base (continued) ────────────────────
 
   static Future<List<KnowledgeEntry>> listKnowledge() async {
     final resp = await http.get(Uri.parse('$_base/api/knowledge/'));
