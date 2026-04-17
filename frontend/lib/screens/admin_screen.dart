@@ -75,6 +75,7 @@ class _UnansweredTab extends StatefulWidget {
 class _UnansweredTabState extends State<_UnansweredTab> {
   List<UnansweredEntry> _entries = [];
   bool _loading = true;
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -129,6 +130,7 @@ class _UnansweredTabState extends State<_UnansweredTab> {
       ),
     );
     if (confirmed == true) {
+      setState(() => _deleting = true);
       try {
         await ApiService.deleteUnanswered(entry.questionId);
         _load();
@@ -138,6 +140,7 @@ class _UnansweredTabState extends State<_UnansweredTab> {
             context,
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -174,6 +177,7 @@ class _UnansweredTabState extends State<_UnansweredTab> {
       ),
     );
     if (confirmed == true) {
+      setState(() => _deleting = true);
       try {
         await ApiService.deleteAllUnanswered();
         _load();
@@ -183,6 +187,7 @@ class _UnansweredTabState extends State<_UnansweredTab> {
             context,
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -369,11 +374,17 @@ class _UnansweredTabState extends State<_UnansweredTab> {
                     'Delete All',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  onPressed: _confirmDeleteAll,
+                  onPressed: _deleting ? null : _confirmDeleteAll,
                 ),
               ],
             ),
           ),
+          if (_deleting)
+            const LinearProgressIndicator(
+              color: Color(0xFFDC2626),
+              backgroundColor: Color(0xFF27272A),
+              minHeight: 3,
+            ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -421,7 +432,7 @@ class _UnansweredTabState extends State<_UnansweredTab> {
                             color: Color(0xFFDC2626),
                             size: 20,
                           ),
-                          onPressed: () => _confirmDelete(e),
+                          onPressed: _deleting ? null : () => _confirmDelete(e),
                           tooltip: 'Delete',
                         ),
                         ElevatedButton(
@@ -468,6 +479,7 @@ class _KnowledgeTab extends StatefulWidget {
 class _KnowledgeTabState extends State<_KnowledgeTab> {
   List<KnowledgeEntry> _entries = [];
   bool _loading = true;
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -522,6 +534,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
       ),
     );
     if (confirmed == true) {
+      setState(() => _deleting = true);
       try {
         await ApiService.deleteKnowledge(entry.questionId);
         _load();
@@ -531,6 +544,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
             context,
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -567,6 +581,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
       ),
     );
     if (confirmed == true) {
+      setState(() => _deleting = true);
       try {
         await ApiService.deleteAllKnowledge();
         _load();
@@ -576,6 +591,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
             context,
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -745,7 +761,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                           'Delete All',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        onPressed: _confirmDeleteAllKnowledge,
+                        onPressed: _deleting ? null : _confirmDeleteAllKnowledge,
                       ),
                     ),
                   ElevatedButton.icon(
@@ -773,6 +789,12 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
             ],
           ),
         ),
+        if (_deleting)
+          const LinearProgressIndicator(
+            color: Color(0xFFDC2626),
+            backgroundColor: Color(0xFF27272A),
+            minHeight: 3,
+          ),
         Expanded(
           child: RefreshIndicator(
             color: const Color(0xFF3B82F6),
@@ -844,7 +866,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                                     color: Color(0xFFDC2626),
                                     size: 20,
                                   ),
-                                  onPressed: () => _confirmDeleteEntry(e),
+                                  onPressed: _deleting ? null : () => _confirmDeleteEntry(e),
                                   tooltip: 'Delete',
                                 ),
                               ],
@@ -879,6 +901,7 @@ class _SessionsTabState extends State<_SessionsTab> {
   bool _uploading = false;
   List<Map<String, dynamic>> _sessions = [];
   bool _loadingSessions = true;
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -945,15 +968,27 @@ class _SessionsTabState extends State<_SessionsTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF18181B),
-        title: const Text('Delete Session', style: TextStyle(color: Color(0xFFFAFAFA))),
+        title: const Text(
+          'Delete Session',
+          style: TextStyle(color: Color(0xFFFAFAFA)),
+        ),
         content: Text(
           'Delete "${session['title'] ?? 'Untitled'}"?',
           style: const TextStyle(color: Color(0xFFA1A1AA)),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Color(0xFF71717A)))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF71717A)),
+            ),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),
@@ -961,12 +996,17 @@ class _SessionsTabState extends State<_SessionsTab> {
       ),
     );
     if (confirmed == true) {
+      setState(() => _deleting = true);
       try {
         await ApiService.deleteSession(session['session_id'] as String);
         _loadSessions();
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (mounted)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -975,15 +1015,27 @@ class _SessionsTabState extends State<_SessionsTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF18181B),
-        title: const Text('Delete All Sessions', style: TextStyle(color: Color(0xFFFAFAFA))),
+        title: const Text(
+          'Delete All Sessions',
+          style: TextStyle(color: Color(0xFFFAFAFA)),
+        ),
         content: Text(
           'Delete all ${_sessions.length} sessions? This cannot be undone.',
           style: const TextStyle(color: Color(0xFFA1A1AA)),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Color(0xFF71717A)))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF71717A)),
+            ),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete All'),
           ),
@@ -991,12 +1043,17 @@ class _SessionsTabState extends State<_SessionsTab> {
       ),
     );
     if (confirmed == true) {
+      setState(() => _deleting = true);
       try {
         await ApiService.deleteAllSessions();
         _loadSessions();
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (mounted)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -1123,11 +1180,17 @@ class _SessionsTabState extends State<_SessionsTab> {
                     'Delete All',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  onPressed: _confirmDeleteAllSessions,
+                  onPressed: _deleting ? null : _confirmDeleteAllSessions,
                 ),
             ],
           ),
           const SizedBox(height: 12),
+          if (_deleting)
+            const LinearProgressIndicator(
+              color: Color(0xFFDC2626),
+              backgroundColor: Color(0xFF27272A),
+              minHeight: 3,
+            ),
           if (_loadingSessions)
             const Center(
               child: Padding(
@@ -1230,7 +1293,7 @@ class _SessionsTabState extends State<_SessionsTab> {
                           color: Color(0xFFDC2626),
                           size: 20,
                         ),
-                        onPressed: () => _confirmDeleteSession(s),
+                        onPressed: _deleting ? null : () => _confirmDeleteSession(s),
                         tooltip: 'Delete',
                       ),
                     ],

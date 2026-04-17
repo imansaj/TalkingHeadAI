@@ -34,9 +34,15 @@ class SessionService:
                 UpdateExpression="SET processed = :p",
                 ExpressionAttributeValues={":p": True},
             )
-            logger.info("[SESSION] Auto-processed transcript '%s' (%s)", title, session_id)
+            logger.info(
+                "[SESSION] Auto-processed transcript '%s' (%s)", title, session_id
+            )
         except Exception:
-            logger.exception("[SESSION] Auto-process failed for '%s' (%s), can retry via /process", title, session_id)
+            logger.exception(
+                "[SESSION] Auto-process failed for '%s' (%s), can retry via /process",
+                title,
+                session_id,
+            )
 
         return item
 
