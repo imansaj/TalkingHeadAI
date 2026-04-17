@@ -103,9 +103,7 @@ class ApiService {
       final request = http.Request('POST', Uri.parse('$_base/api/chat/voice'));
       request.headers['Content-Type'] = 'application/json';
       request.headers['Accept'] = 'text/event-stream';
-      request.body = jsonEncode({
-        'audio_base64': base64Encode(audioBytes),
-      });
+      request.body = jsonEncode({'audio_base64': base64Encode(audioBytes)});
 
       final response = await client
           .send(request)
