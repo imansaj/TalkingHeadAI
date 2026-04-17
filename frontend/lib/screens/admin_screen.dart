@@ -292,6 +292,33 @@ class _UnansweredTabState extends State<_UnansweredTab> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF22C55E),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              onPressed: () async {
+                try {
+                  await ApiService.approveQuestion(entry.questionId);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  _load();
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                }
+              },
+              child: const Text('Approve AI Answer'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
@@ -761,7 +788,9 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                           'Delete All',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        onPressed: _deleting ? null : _confirmDeleteAllKnowledge,
+                        onPressed: _deleting
+                            ? null
+                            : _confirmDeleteAllKnowledge,
                       ),
                     ),
                   ElevatedButton.icon(
@@ -866,7 +895,9 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                                     color: Color(0xFFDC2626),
                                     size: 20,
                                   ),
-                                  onPressed: _deleting ? null : () => _confirmDeleteEntry(e),
+                                  onPressed: _deleting
+                                      ? null
+                                      : () => _confirmDeleteEntry(e),
                                   tooltip: 'Delete',
                                 ),
                               ],
@@ -1293,7 +1324,9 @@ class _SessionsTabState extends State<_SessionsTab> {
                           color: Color(0xFFDC2626),
                           size: 20,
                         ),
-                        onPressed: _deleting ? null : () => _confirmDeleteSession(s),
+                        onPressed: _deleting
+                            ? null
+                            : () => _confirmDeleteSession(s),
                         tooltip: 'Delete',
                       ),
                     ],

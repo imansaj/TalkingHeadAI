@@ -77,3 +77,7 @@ class ChatResponse(BaseModel):
 class ReviewAnswerRequest(BaseModel):
     question_id: str
     answer: str
+
+
+class ApproveAnswerRequest(BaseModel):
+    question_id: str

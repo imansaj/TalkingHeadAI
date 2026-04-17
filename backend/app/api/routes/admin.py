@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.services.knowledge_service import KnowledgeService
-from app.models.schemas import ReviewAnswerRequest
+from app.models.schemas import ReviewAnswerRequest, ApproveAnswerRequest
 
 router = APIRouter()
 
@@ -17,6 +17,15 @@ async def review_question(req: ReviewAnswerRequest):
     """Mentor reviews an unanswered question and provides an authoritative answer."""
     try:
         return KnowledgeService.review_unanswered(req.question_id, req.answer)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/approve")
+async def approve_question(req: ApproveAnswerRequest):
+    """Approve the AI's general response as the authoritative answer."""
+    try:
+        return KnowledgeService.approve_unanswered(req.question_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

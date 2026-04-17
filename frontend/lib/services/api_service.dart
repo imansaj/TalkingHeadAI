@@ -151,6 +151,15 @@ class ApiService {
     if (resp.statusCode != 200) throw Exception('Failed to review question');
   }
 
+  static Future<void> approveQuestion(String questionId) async {
+    final resp = await http.post(
+      Uri.parse('$_base/api/admin/approve'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'question_id': questionId}),
+    );
+    if (resp.statusCode != 200) throw Exception('Failed to approve question');
+  }
+
   static Future<void> deleteUnanswered(String questionId) async {
     final resp = await http.delete(
       Uri.parse('$_base/api/admin/unanswered/$questionId'),

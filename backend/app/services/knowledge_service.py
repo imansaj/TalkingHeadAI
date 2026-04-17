@@ -288,3 +288,25 @@ class KnowledgeService:
         )
 
         return kb_entry
+
+    @classmethod
+    def approve_unanswered(cls, question_id: str) -> dict:
+        """Approve the AI's general response as the authoritative answer."""
+        unanswered_table = get_table(settings.dynamodb_table_unanswered)
+        resp = unanswered_table.get_item(Key={"question_id": question_id})
+        item = resp.get("Item")
+        if not item:
+            raise ValueError("Unanswered entry not found")
+
+        # Use the AI's general_response as the answer
+        kb_entry = cls.add_knowledge_entry(item["question"], item["general_response"])
+
+        # Mark as reviewed
+        unanswered_table.update_item(
+            Key={"question_id": question_id},
+            UpdateExpression="SET #s = :s",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={":s": "reviewed"},
+        )
+
+        return kb_entry
