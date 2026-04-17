@@ -100,8 +100,14 @@ class RAGService:
             cls._index.add(vecs)
         cls.save_index()
 
+    _rebuild_attempted: bool = False
+
     @classmethod
     def search(cls, query: str, top_k: int = 5) -> list[dict]:
+        # Lazy rebuild: if index is empty and we haven't tried yet, rebuild from DB
+        if (cls._index is None or cls._index.ntotal == 0) and not cls._rebuild_attempted:
+            logger.info("[RAG] Index empty at search time — triggering lazy rebuild")
+            cls.rebuild_from_db()
         if cls._index is None or cls._index.ntotal == 0:
             return []
         vec = cls.embed([query])
@@ -122,52 +128,64 @@ class RAGService:
     @classmethod
     def rebuild_from_db(cls):
         """Rebuild FAISS index from DynamoDB when local index is empty (e.g. ephemeral disk)."""
-        from app.db.dynamodb import get_table
+        cls._rebuild_attempted = True
+        try:
+            from app.db.dynamodb import get_table
 
-        settings = get_settings()
+            settings = get_settings()
 
-        entries: list[dict] = []  # [{question_id, embed_text, context_text}]
+            entries: list[dict] = []  # [{question_id, embed_text, context_text}]
 
-        # 1) Knowledge table
-        kb_table = get_table(settings.dynamodb_table_knowledge)
-        kb_items = kb_table.scan().get("Items", [])
-        for item in kb_items:
-            q = item.get("question", "")
-            a = item.get("answer", "")
-            if q:
-                entries.append({
-                    "question_id": item["question_id"],
-                    "embed_text": q,
-                    "context_text": f"Q: {q}\nA: {a}",
-                })
+            # 1) Knowledge table
+            kb_table = get_table(settings.dynamodb_table_knowledge)
+            kb_items = kb_table.scan().get("Items", [])
+            logger.info("[RAG] Found %d knowledge entries in DB", len(kb_items))
+            for item in kb_items:
+                q = item.get("question", "")
+                a = item.get("answer", "")
+                if q:
+                    entries.append({
+                        "question_id": item["question_id"],
+                        "embed_text": q,
+                        "context_text": f"Q: {q}\nA: {a}",
+                    })
 
-        # 2) Unanswered table (pending only — reviewed ones are in knowledge)
-        ua_table = get_table(settings.dynamodb_table_unanswered)
-        ua_items = ua_table.scan().get("Items", [])
-        for item in ua_items:
-            if item.get("status") != "pending":
-                continue
-            q = item.get("question", "")
-            a = item.get("general_response", "")
-            if q:
-                entries.append({
-                    "question_id": item["question_id"],
-                    "embed_text": q,
-                    "context_text": f"Q: {q}\nA: {a}",
-                })
+            # 2) Unanswered table (pending only — reviewed ones are in knowledge)
+            ua_table = get_table(settings.dynamodb_table_unanswered)
+            ua_items = ua_table.scan().get("Items", [])
+            logger.info("[RAG] Found %d unanswered entries in DB", len(ua_items))
+            for item in ua_items:
+                if item.get("status") != "pending":
+                    continue
+                q = item.get("question", "")
+                a = item.get("general_response", "")
+                if q:
+                    entries.append({
+                        "question_id": item["question_id"],
+                        "embed_text": q,
+                        "context_text": f"Q: {q}\nA: {a}",
+                    })
 
-        if not entries:
-            logger.info("[RAG] No DB entries to rebuild index from")
-            return
+            if not entries:
+                logger.info("[RAG] No DB entries to rebuild index from")
+                return
 
-        logger.info("[RAG] Rebuilding FAISS index from %d DB entries", len(entries))
+            logger.info("[RAG] Rebuilding FAISS index from %d DB entries", len(entries))
 
-        # Batch embed all questions
-        texts = [e["embed_text"] for e in entries]
-        vecs = cls.embed(texts)
+            # Batch embed — chunk to avoid OpenAI rate limits
+            BATCH_SIZE = 100
+            all_vecs = []
+            for i in range(0, len(entries), BATCH_SIZE):
+                batch_texts = [e["embed_text"] for e in entries[i:i + BATCH_SIZE]]
+                batch_vecs = cls.embed(batch_texts)
+                all_vecs.append(batch_vecs)
+                logger.info("[RAG] Embedded batch %d-%d", i, i + len(batch_texts))
+            vecs = np.vstack(all_vecs)
 
-        cls._index = faiss.IndexFlatIP(cls._dimension)
-        cls._index.add(vecs)
-        cls._metadata = entries
-        cls.save_index()
-        logger.info("[RAG] FAISS index rebuilt: %d vectors", cls._index.ntotal)
+            cls._index = faiss.IndexFlatIP(cls._dimension)
+            cls._index.add(vecs)
+            cls._metadata = entries
+            cls.save_index()
+            logger.info("[RAG] FAISS index rebuilt successfully: %d vectors", cls._index.ntotal)
+        except Exception:
+            logger.exception("[RAG] Failed to rebuild FAISS index from DB")

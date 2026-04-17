@@ -35,11 +35,15 @@ app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])
 async def startup():
     create_tables()
     RAGService.load_index()
-    # Rebuild from DynamoDB if local index is empty (ephemeral disk on Render)
-    if RAGService._index is None or RAGService._index.ntotal == 0:
-        RAGService.rebuild_from_db()
+    # Always rebuild from DynamoDB to stay in sync (ephemeral disk on Render)
+    RAGService.rebuild_from_db()
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "v8-faiss-fix"}
+    return {
+        "status": "ok",
+        "version": "v9-rebuild-fix",
+        "faiss_vectors": RAGService._index.ntotal if RAGService._index else 0,
+        "rebuild_attempted": RAGService._rebuild_attempted,
+    }
