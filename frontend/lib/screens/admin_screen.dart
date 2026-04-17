@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models.dart';
 import '../services/api_service.dart';
 
@@ -28,21 +29,21 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F1A),
+      backgroundColor: const Color(0xFF09090B),
       appBar: AppBar(
         title: const Text(
           'Admin Panel — Mentor (Jack)',
           style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.3),
         ),
-        backgroundColor: const Color(0xFF161625),
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF09090B),
+        foregroundColor: const Color(0xFFFAFAFA),
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFF6C63FF),
+          indicatorColor: const Color(0xFF3B82F6),
           indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white38,
+          labelColor: const Color(0xFFFAFAFA),
+          unselectedLabelColor: const Color(0xFF71717A),
           labelStyle: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 13,
@@ -102,13 +103,14 @@ class _UnansweredTabState extends State<_UnansweredTab> {
       builder: (ctx) {
         final screenHeight = MediaQuery.of(ctx).size.height;
         return AlertDialog(
-          backgroundColor: const Color(0xFF1E1E32),
+          backgroundColor: const Color(0xFF18181B),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFF27272A)),
           ),
           title: const Text(
             'Review Question',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            style: TextStyle(color: Color(0xFFFAFAFA), fontWeight: FontWeight.w600),
           ),
           content: ConstrainedBox(
             constraints: BoxConstraints(
@@ -123,71 +125,58 @@ class _UnansweredTabState extends State<_UnansweredTab> {
                   const Text(
                     'Question:',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: Color(0xFFA1A1AA),
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161625),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      entry.question,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                  _CopyableBlock(
+                    text: entry.question,
+                    textStyle: const TextStyle(
+                      color: Color(0xFFFAFAFA),
+                      fontSize: 14,
                     ),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'AI General Response:',
                     style: TextStyle(
-                      color: const Color(0xFFFFAB40),
+                      color: const Color(0xFFF59E0B),
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161625),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      entry.generalResponse,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        height: 1.5,
-                      ),
+                  _CopyableBlock(
+                    text: entry.generalResponse,
+                    textStyle: const TextStyle(
+                      color: Color(0xFFA1A1AA),
+                      fontSize: 13,
+                      height: 1.5,
                     ),
                   ),
                   const SizedBox(height: 20),
                   TextField(
                     controller: answerController,
                     maxLines: 4,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Color(0xFFFAFAFA)),
                     decoration: InputDecoration(
                       labelText: 'Your authoritative answer',
-                      labelStyle: const TextStyle(color: Colors.white38),
+                      labelStyle: const TextStyle(color: Color(0xFF52525B)),
                       filled: true,
-                      fillColor: const Color(0xFF0F0F1A),
+                      fillColor: const Color(0xFF09090B),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF2E2E48)),
+                        borderSide: const BorderSide(color: Color(0xFF3F3F46)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6)),
                       ),
                     ),
                   ),
@@ -200,12 +189,12 @@ class _UnansweredTabState extends State<_UnansweredTab> {
               onPressed: () => Navigator.pop(ctx),
               child: const Text(
                 'Cancel',
-                style: TextStyle(color: Colors.white38),
+                style: TextStyle(color: Color(0xFF71717A)),
               ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
+                backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -244,19 +233,19 @@ class _UnansweredTabState extends State<_UnansweredTab> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+        child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
       );
     }
     if (_entries.isEmpty) {
       return const Center(
         child: Text(
           'No unanswered questions 🎉',
-          style: TextStyle(color: Colors.white38, fontSize: 16),
+          style: TextStyle(color: Color(0xFF52525B), fontSize: 16),
         ),
       );
     }
     return RefreshIndicator(
-      color: const Color(0xFF6C63FF),
+      color: const Color(0xFF3B82F6),
       onRefresh: _load,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -264,10 +253,11 @@ class _UnansweredTabState extends State<_UnansweredTab> {
         itemBuilder: (_, i) {
           final e = _entries[i];
           return Card(
-            color: const Color(0xFF1E1E32),
+            color: const Color(0xFF18181B),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: Color(0xFF27272A)),
             ),
             margin: const EdgeInsets.only(bottom: 12),
             child: ListTile(
@@ -277,7 +267,7 @@ class _UnansweredTabState extends State<_UnansweredTab> {
               ),
               title: Text(
                 e.question,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: const TextStyle(color: Color(0xFFFAFAFA), fontSize: 14),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -285,13 +275,13 @@ class _UnansweredTabState extends State<_UnansweredTab> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'Asked: ${e.createdAt}',
-                  style: const TextStyle(color: Colors.white24, fontSize: 12),
+                  style: const TextStyle(color: Color(0xFF52525B), fontSize: 12),
                 ),
               ),
               trailing: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFAB40),
-                  foregroundColor: Colors.black87,
+                  backgroundColor: const Color(0xFFF59E0B),
+                  foregroundColor: const Color(0xFF09090B),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -356,7 +346,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
       builder: (ctx) {
         final screenHeight = MediaQuery.of(ctx).size.height;
         return AlertDialog(
-          backgroundColor: const Color(0xFF1E1E32),
+          backgroundColor: const Color(0xFF18181B),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -378,20 +368,20 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Question',
-                      labelStyle: const TextStyle(color: Colors.white38),
+                      labelStyle: const TextStyle(color: const Color(0xFF52525B)),
                       filled: true,
-                      fillColor: const Color(0xFF0F0F1A),
+                      fillColor: const Color(0xFF09090B),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF2E2E48)),
+                        borderSide: const BorderSide(color: Color(0xFF3F3F46)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6)),
                       ),
                     ),
                   ),
@@ -402,20 +392,20 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Answer',
-                      labelStyle: const TextStyle(color: Colors.white38),
+                      labelStyle: const TextStyle(color: const Color(0xFF52525B)),
                       filled: true,
-                      fillColor: const Color(0xFF0F0F1A),
+                      fillColor: const Color(0xFF09090B),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF2E2E48)),
+                        borderSide: const BorderSide(color: Color(0xFF3F3F46)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6)),
                       ),
                     ),
                   ),
@@ -428,12 +418,12 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
               onPressed: () => Navigator.pop(ctx),
               child: const Text(
                 'Cancel',
-                style: TextStyle(color: Colors.white38),
+                style: TextStyle(color: Color(0xFF71717A)),
               ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
+                backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -473,7 +463,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+        child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
       );
     }
     return Column(
@@ -485,11 +475,11 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
             children: [
               Text(
                 '${_entries.length} entries',
-                style: const TextStyle(color: Colors.white38),
+                style: const TextStyle(color: const Color(0xFF52525B)),
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C63FF),
+                  backgroundColor: const Color(0xFF3B82F6),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -512,7 +502,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
         ),
         Expanded(
           child: RefreshIndicator(
-            color: const Color(0xFF6C63FF),
+            color: const Color(0xFF3B82F6),
             onRefresh: _load,
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -520,15 +510,15 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
               itemBuilder: (_, i) {
                 final e = _entries[i];
                 return Card(
-                  color: const Color(0xFF1E1E32),
+                  color: const Color(0xFF18181B),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   margin: const EdgeInsets.only(bottom: 10),
                   child: ExpansionTile(
-                    iconColor: Colors.white38,
-                    collapsedIconColor: Colors.white24,
+                    iconColor: const Color(0xFF52525B),
+                    collapsedIconColor: const Color(0xFF3F3F46),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -544,7 +534,7 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                       child: Text(
                         'Asked ${e.timesAsked}x • Source: ${e.source}',
                         style: const TextStyle(
-                          color: Colors.white24,
+                          color: const Color(0xFF3F3F46),
                           fontSize: 12,
                         ),
                       ),
@@ -552,15 +542,31 @@ class _KnowledgeTabState extends State<_KnowledgeTab> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            e.answer,
-                            style: const TextStyle(
-                              color: Colors.white60,
-                              height: 1.5,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              e.answer,
+                              style: const TextStyle(
+                                color: const Color(0xFFA1A1AA),
+                                height: 1.5,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                _CopyIconButton(
+                                  text: e.question,
+                                  label: 'Question',
+                                ),
+                                const SizedBox(width: 8),
+                                _CopyIconButton(
+                                  text: e.answer,
+                                  label: 'Answer',
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -639,20 +645,20 @@ class _SessionsTabState extends State<_SessionsTab> {
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'Session Title',
-              labelStyle: const TextStyle(color: Colors.white38),
+              labelStyle: const TextStyle(color: const Color(0xFF52525B)),
               filled: true,
-              fillColor: const Color(0xFF1E1E32),
+              fillColor: const Color(0xFF18181B),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF2E2E48)),
+                borderSide: const BorderSide(color: Color(0xFF3F3F46)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+                borderSide: const BorderSide(color: Color(0xFF3B82F6)),
               ),
             ),
           ),
@@ -663,20 +669,20 @@ class _SessionsTabState extends State<_SessionsTab> {
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'Paste transcript here...',
-              labelStyle: const TextStyle(color: Colors.white38),
+              labelStyle: const TextStyle(color: const Color(0xFF52525B)),
               filled: true,
-              fillColor: const Color(0xFF1E1E32),
+              fillColor: const Color(0xFF18181B),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF2E2E48)),
+                borderSide: const BorderSide(color: Color(0xFF3F3F46)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+                borderSide: const BorderSide(color: Color(0xFF3B82F6)),
               ),
             ),
           ),
@@ -685,7 +691,7 @@ class _SessionsTabState extends State<_SessionsTab> {
             width: double.infinity,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
+                backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -711,6 +717,99 @@ class _SessionsTabState extends State<_SessionsTab> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Shared Copy Widgets ─────────────────────────────────
+
+class _CopyableBlock extends StatelessWidget {
+  final String text;
+  final TextStyle? textStyle;
+
+  const _CopyableBlock({required this.text, this.textStyle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF18181B),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 28),
+            child: Text(text, style: textStyle),
+          ),
+          Positioned(top: -4, right: -4, child: _CopyButton(text: text)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CopyButton extends StatelessWidget {
+  final String text;
+
+  const _CopyButton({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.copy, size: 15, color: const Color(0xFF3F3F46)),
+      tooltip: 'Copy',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      splashRadius: 16,
+      onPressed: () {
+        Clipboard.setData(ClipboardData(text: text));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Copied to clipboard'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CopyIconButton extends StatelessWidget {
+  final String text;
+  final String label;
+
+  const _CopyIconButton({required this.text, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: text));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$label copied'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.copy, size: 13, color: const Color(0xFF3F3F46)),
+            const SizedBox(width: 4),
+            Text(
+              'Copy $label',
+              style: const TextStyle(color: const Color(0xFF3F3F46), fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }

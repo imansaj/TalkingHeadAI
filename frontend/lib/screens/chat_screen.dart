@@ -38,16 +38,45 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: const Color(0xFF09090B),
       appBar: AppBar(
-        title: const Text('TalkingHeadAI'),
-        backgroundColor: const Color(0xFF16213E),
-        foregroundColor: Colors.white,
+        title: const Text(
+          'TalkingHeadAI',
+          style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.3),
+        ),
+        backgroundColor: const Color(0xFF09090B),
+        foregroundColor: const Color(0xFFFAFAFA),
+        elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings),
-            tooltip: 'Admin Panel',
-            onPressed: () => Navigator.pushNamed(context, '/admin'),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => Navigator.pushNamed(context, '/admin'),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.admin_panel_settings,
+                      size: 22,
+                      color: Color(0xFFA1A1AA),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Admin',
+                      style: TextStyle(
+                        color: Color(0xFFA1A1AA),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -79,10 +108,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
+                        color: const Color(0xFF22C55E).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: const Color(0xFF4CAF50),
+                          color: const Color(0xFF22C55E).withValues(alpha: 0.5),
                           width: 1,
                         ),
                       ),
@@ -91,14 +120,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         children: [
                           Icon(
                             Icons.stop_circle,
-                            color: Color(0xFF4CAF50),
+                            color: Color(0xFF22C55E),
                             size: 20,
                           ),
                           SizedBox(width: 6),
                           Text(
                             'Stop Speaking',
                             style: TextStyle(
-                              color: Color(0xFF4CAF50),
+                              color: Color(0xFF22C55E),
                               fontSize: 14,
                             ),
                           ),
@@ -108,7 +137,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
 
-              const Divider(color: Color(0xFF2A2A4A), height: 1),
+              const Divider(color: Color(0xFF27272A), height: 1),
 
               // Messages list
               Expanded(
@@ -133,13 +162,13 @@ class _ChatScreenState extends State<ChatScreen> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Color(0xFF4CAF50),
+                          color: Color(0xFF3B82F6),
                         ),
                       ),
                       SizedBox(width: 10),
                       Text(
                         'Thinking...',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF71717A)),
                       ),
                     ],
                   ),
@@ -161,7 +190,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       const SizedBox(width: 8),
                       const Text(
                         'Streaming...',
-                        style: TextStyle(color: Colors.white24, fontSize: 12),
+                        style: TextStyle(
+                          color: Color(0xFF52525B),
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -170,18 +202,21 @@ class _ChatScreenState extends State<ChatScreen> {
               // Input area
               Container(
                 padding: const EdgeInsets.all(12),
-                color: const Color(0xFF16213E),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF18181B),
+                  border: Border(top: BorderSide(color: Color(0xFF27272A))),
+                ),
                 child: Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _controller,
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFFFAFAFA)),
                         decoration: InputDecoration(
                           hintText: 'Ask a question...',
-                          hintStyle: const TextStyle(color: Colors.white38),
+                          hintStyle: const TextStyle(color: Color(0xFF52525B)),
                           filled: true,
-                          fillColor: const Color(0xFF1A1A2E),
+                          fillColor: const Color(0xFF27272A),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(24),
                             borderSide: BorderSide.none,
@@ -196,7 +231,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     const SizedBox(width: 8),
                     CircleAvatar(
-                      backgroundColor: const Color(0xFF4CAF50),
+                      backgroundColor: const Color(0xFF3B82F6),
                       child: IconButton(
                         icon: const Icon(Icons.send, color: Colors.white),
                         onPressed: _send,
@@ -230,11 +265,12 @@ class _MessageBubble extends StatelessWidget {
           maxWidth: MediaQuery.of(context).size.width * 0.7,
         ),
         decoration: BoxDecoration(
-          color: isUser ? const Color(0xFF4CAF50) : const Color(0xFF2A2A4A),
+          color: isUser ? const Color(0xFF3B82F6) : const Color(0xFF18181B),
           borderRadius: BorderRadius.circular(16).copyWith(
             bottomRight: isUser ? const Radius.circular(4) : null,
             bottomLeft: !isUser ? const Radius.circular(4) : null,
           ),
+          border: isUser ? null : Border.all(color: const Color(0xFF27272A)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,13 +347,13 @@ class _MessageBubble extends StatelessWidget {
   static Color _tagColor(String answerType) {
     switch (answerType) {
       case 'new':
-        return Colors.orange;
+        return const Color(0xFFF59E0B);
       case 'known':
-        return Colors.lightBlue;
+        return const Color(0xFF38BDF8);
       case 'repeated':
-        return Colors.purple;
+        return const Color(0xFF8B5CF6);
       default:
-        return Colors.grey;
+        return const Color(0xFF71717A);
     }
   }
 }
