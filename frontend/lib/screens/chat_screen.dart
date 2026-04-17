@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 import '../models.dart';
@@ -20,8 +21,6 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
   final _recorder = AudioRecorder();
   bool _isRecording = false;
-  StreamSubscription<Uint8List>? _recordSub;
-  final List<Uint8List> _audioChunks = [];
 
   void _send() {
     final text = _controller.text.trim();
@@ -44,37 +43,33 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _toggleRecording() async {
     if (_isRecording) {
-      // Stop and send
-      await _recordSub?.cancel();
-      await _recorder.stop();
+      // Stop recording — returns a blob URL on web
+      final path = await _recorder.stop();
       setState(() => _isRecording = false);
 
-      if (_audioChunks.isNotEmpty) {
-        final totalLength = _audioChunks.fold<int>(
-          0,
-          (sum, c) => sum + c.length,
-        );
-        final combined = Uint8List(totalLength);
-        var offset = 0;
-        for (final chunk in _audioChunks) {
-          combined.setRange(offset, offset + chunk.length, chunk);
-          offset += chunk.length;
-        }
-        _audioChunks.clear();
-        if (combined.isNotEmpty) {
-          context.read<ChatProvider>().sendVoice(combined);
+      if (path != null && path.isNotEmpty) {
+        try {
+          // On web, path is a blob: URL; fetch it to get raw bytes
+          final resp = await http.get(Uri.parse(path));
+          final audioBytes = resp.bodyBytes;
+          if (audioBytes.isNotEmpty) {
+            context.read<ChatProvider>().sendVoice(audioBytes);
+          }
+        } catch (e) {
+          debugPrint('Failed to read recording: $e');
         }
       }
     } else {
-      // Start recording via stream (web-compatible)
+      // Request permission and start recording
       if (await _recorder.hasPermission()) {
-        _audioChunks.clear();
-        final stream = await _recorder.startStream(
-          const RecordConfig(encoder: AudioEncoder.opus),
+        await _recorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.opus,
+            numChannels: 1,
+            sampleRate: 16000,
+          ),
+          path: '',
         );
-        _recordSub = stream.listen((data) {
-          _audioChunks.add(data);
-        });
         setState(() => _isRecording = true);
       }
     }
@@ -82,7 +77,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    _recordSub?.cancel();
     _recorder.dispose();
     _controller.dispose();
     _scrollController.dispose();
