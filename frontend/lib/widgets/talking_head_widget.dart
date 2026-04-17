@@ -496,21 +496,43 @@ class _MemojiPainter extends CustomPainter {
       )
       ..close();
 
-    // Hair gradient
-    final hairRect = Rect.fromLTWH(
-      cx - r * 1.1,
-      cy - r * 1.4,
-      r * 2.2,
-      r * 1.3,
-    );
+    // Hair fill — use solid color for cross-renderer compatibility
+    // (HTML renderer doesn't support Paint.shader on complex paths)
+    canvas.drawPath(hairPath, Paint()..color = hairColor);
+
+    // Lighter top highlight — drawn as a second smaller path overlay
+    final highlightPath = Path()
+      ..moveTo(cx - r * 0.85, cy - r * 0.4)
+      ..quadraticBezierTo(
+        cx - r * 0.95,
+        cy - r * 0.8,
+        cx - r * 0.45,
+        cy - r * 1.10,
+      )
+      ..quadraticBezierTo(cx, cy - r * 1.28, cx + r * 0.45, cy - r * 1.10)
+      ..quadraticBezierTo(
+        cx + r * 0.95,
+        cy - r * 0.8,
+        cx + r * 0.85,
+        cy - r * 0.4,
+      )
+      ..quadraticBezierTo(
+        cx + r * 0.75,
+        cy - r * 0.6,
+        cx + r * 0.5,
+        cy - r * 0.72,
+      )
+      ..quadraticBezierTo(cx, cy - r * 0.95, cx - r * 0.5, cy - r * 0.72)
+      ..quadraticBezierTo(
+        cx - r * 0.75,
+        cy - r * 0.6,
+        cx - r * 0.85,
+        cy - r * 0.4,
+      )
+      ..close();
     canvas.drawPath(
-      hairPath,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [hairHighlight, hairColor],
-        ).createShader(hairRect),
+      highlightPath,
+      Paint()..color = hairHighlight.withValues(alpha: 0.55),
     );
 
     // Hair shine streak
@@ -577,20 +599,7 @@ class _MemojiPainter extends CustomPainter {
         Radius.circular(openH * 1.2),
       );
       interiorPath.addRRect(mouthRect);
-      canvas.drawPath(
-        interiorPath,
-        Paint()
-          ..shader =
-              RadialGradient(
-                colors: [const Color(0xFF1A0505), const Color(0xFF3D0A0A)],
-              ).createShader(
-                Rect.fromCenter(
-                  center: Offset(cx, jawY),
-                  width: mw * 1.7,
-                  height: openH * 2,
-                ),
-              ),
-      );
+      canvas.drawPath(interiorPath, Paint()..color = const Color(0xFF1A0505));
 
       // Teeth row — visible when moderately open
       if (mouthOpen > 0.3) {
