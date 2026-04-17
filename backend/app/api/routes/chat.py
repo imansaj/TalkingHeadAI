@@ -354,17 +354,217 @@ async def chat_stream(req: ChatRequest):
     )
 
 
-@router.post("/voice", response_model=ChatResponse)
+@router.post("/voice")
 async def chat_voice(audio: UploadFile = File(...)):
-    """Voice-based chat — accepts audio, returns text + audio."""
+    """Voice-based chat — STT then SSE stream (same as /stream but from audio).
+
+    First event is always: transcript {"text": "..."}
+    Then same events as /stream: meta, sentence, done, error.
+    """
     audio_bytes = await audio.read()
     transcript = STTService.transcribe(audio_bytes, audio.filename or "audio.webm")
-    result = KnowledgeService.answer_question(transcript)
-    audio_b64 = await TTSService.synthesize_base64(result["text"])
-    return ChatResponse(
-        answer_type=result["answer_type"],
-        text=result["text"],
-        audio_base64=audio_b64,
-        times_asked=result["times_asked"],
-        transcript=transcript,
+
+    def generate():
+        # Emit transcript immediately so the frontend can show it
+        yield _sse_event("transcript", {"text": transcript})
+
+        # Reuse the same streaming logic as /stream
+        try:
+            t0 = time.time()
+            question = transcript
+
+            from app.config import get_settings
+            from app.db.dynamodb import get_table
+            from decimal import Decimal
+            from openai import OpenAI
+
+            settings = get_settings()
+            client = OpenAI(
+                api_key=settings.openai_api_key,
+                timeout=httpx.Timeout(30.0, connect=10.0),
+            )
+
+            rag_results = RAGService.search(question, top_k=5)
+
+            match = None
+            match_source = None
+            SIMILARITY_THRESHOLD = 0.75
+
+            if rag_results and rag_results[0]["score"] >= SIMILARITY_THRESHOLD:
+                q_id = rag_results[0]["question_id"]
+                table = get_table(settings.dynamodb_table_knowledge)
+                resp = table.get_item(Key={"question_id": q_id})
+                match = resp.get("Item")
+                if match:
+                    match_source = "knowledge"
+                else:
+                    unanswered_table = get_table(settings.dynamodb_table_unanswered)
+                    resp = unanswered_table.get_item(Key={"question_id": q_id})
+                    match = resp.get("Item")
+                    if match:
+                        match_source = "unanswered"
+
+            def _tts_b64(text: str) -> str:
+                tts_resp = client.audio.speech.create(
+                    model="tts-1", voice="alloy", input=text
+                )
+                return base64.b64encode(tts_resp.content).decode("utf-8")
+
+            def _stream_llm_with_tts(
+                question, context_chunks, is_new, prefix, answer_type, times_asked
+            ):
+                prefix_audio = _tts_b64(prefix)
+                yield _sse_event(
+                    "sentence", {"text": prefix, "audio_base64": prefix_audio}
+                )
+
+                sentence_buffer = ""
+                full_text_parts = [prefix]
+
+                for token in LLMService.generate_response_stream(
+                    question=question,
+                    context_chunks=context_chunks,
+                    is_new=is_new,
+                ):
+                    full_text_parts.append(token)
+                    sentence_buffer += token
+
+                    if (
+                        _SENTENCE_END.search(sentence_buffer)
+                        and len(sentence_buffer) >= 20
+                    ):
+                        audio_b64 = _tts_b64(sentence_buffer.strip())
+                        yield _sse_event(
+                            "sentence",
+                            {"text": sentence_buffer, "audio_base64": audio_b64},
+                        )
+                        sentence_buffer = ""
+
+                if sentence_buffer.strip():
+                    audio_b64 = _tts_b64(sentence_buffer.strip())
+                    yield _sse_event(
+                        "sentence", {"text": sentence_buffer, "audio_base64": audio_b64}
+                    )
+
+                full_text = "".join(full_text_parts)
+                yield _sse_event(
+                    "done",
+                    {
+                        "answer_type": answer_type,
+                        "times_asked": times_asked,
+                        "full_text": full_text,
+                    },
+                )
+
+            if match and match_source == "knowledge":
+                table = get_table(settings.dynamodb_table_knowledge)
+                new_count = int(match.get("times_asked", 1)) + 1
+                table.update_item(
+                    Key={"question_id": match["question_id"]},
+                    UpdateExpression="SET times_asked = :c",
+                    ExpressionAttributeValues={":c": Decimal(str(new_count))},
+                )
+                yield _sse_event(
+                    "meta", {"answer_type": "known", "times_asked": new_count}
+                )
+                yield from _stream_llm_with_tts(
+                    question,
+                    [match["answer"]],
+                    False,
+                    f"{new_count} people have asked this question. ",
+                    "known",
+                    new_count,
+                )
+                return
+
+            if match and match_source == "unanswered":
+                yield _sse_event("meta", {"answer_type": "new", "times_asked": None})
+                context_chunks = [r["text"] for r in rag_results]
+                yield from _stream_llm_with_tts(
+                    question,
+                    context_chunks,
+                    True,
+                    "This is a new question. I will give you a general response. ",
+                    "new",
+                    None,
+                )
+                return
+
+            # New question
+            yield _sse_event("meta", {"answer_type": "new", "times_asked": None})
+            context_chunks = [r["text"] for r in rag_results]
+
+            prefix = "This is a new question. I will give you a general response. "
+            prefix_audio = _tts_b64(prefix)
+            yield _sse_event("sentence", {"text": prefix, "audio_base64": prefix_audio})
+
+            sentence_buffer = ""
+            full_text_parts = [prefix]
+
+            for token in LLMService.generate_response_stream(
+                question=question,
+                context_chunks=context_chunks,
+                is_new=True,
+            ):
+                full_text_parts.append(token)
+                sentence_buffer += token
+
+                if _SENTENCE_END.search(sentence_buffer) and len(sentence_buffer) >= 20:
+                    audio_b64 = _tts_b64(sentence_buffer.strip())
+                    yield _sse_event(
+                        "sentence", {"text": sentence_buffer, "audio_base64": audio_b64}
+                    )
+                    sentence_buffer = ""
+
+            if sentence_buffer.strip():
+                audio_b64 = _tts_b64(sentence_buffer.strip())
+                yield _sse_event(
+                    "sentence", {"text": sentence_buffer, "audio_base64": audio_b64}
+                )
+
+            full_text = "".join(full_text_parts)
+
+            import uuid
+            from datetime import datetime
+
+            q_id = str(uuid.uuid4())
+            general_response = full_text[len(prefix) :]
+            unanswered_table = get_table(settings.dynamodb_table_unanswered)
+            unanswered_table.put_item(
+                Item={
+                    "question_id": q_id,
+                    "question": question,
+                    "general_response": general_response,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "status": "pending",
+                }
+            )
+            RAGService.add_entry(
+                q_id,
+                embed_text=question,
+                context_text=f"Q: {question}\nA: {general_response}",
+            )
+
+            logger.info("[TIMING] Voice streaming total: %.2fs", time.time() - t0)
+
+            yield _sse_event(
+                "done",
+                {
+                    "answer_type": "new",
+                    "times_asked": None,
+                    "full_text": full_text,
+                },
+            )
+
+        except Exception as e:
+            logger.exception("Voice stream error")
+            yield _sse_event("error", {"detail": str(e)})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )

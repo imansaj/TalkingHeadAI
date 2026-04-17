@@ -95,24 +95,65 @@ class ApiService {
 
   // ── Knowledge Base ────────────────────────────────
 
-  static Future<ChatResponse> chatVoice(Uint8List audioBytes) async {
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$_base/api/chat/voice'),
-    );
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'audio',
-        audioBytes,
-        filename: 'recording.webm',
-      ),
-    );
-    final streamed = await request.send().timeout(const Duration(seconds: 120));
-    final resp = await http.Response.fromStream(streamed);
-    if (resp.statusCode != 200) {
-      throw Exception('Voice chat failed (${resp.statusCode}): ${resp.body}');
+  /// Streaming voice chat via SSE — sends audio, gets back transcript + streamed response.
+  /// Events: transcript, meta, sentence, done, error.
+  static Stream<ChatStreamEvent> chatVoiceStream(Uint8List audioBytes) async* {
+    final client = http.Client();
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_base/api/chat/voice'),
+      );
+      request.headers['Accept'] = 'text/event-stream';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          audioBytes,
+          filename: 'recording.webm',
+        ),
+      );
+
+      final response = await client
+          .send(request)
+          .timeout(const Duration(seconds: 120));
+
+      if (response.statusCode != 200) {
+        throw Exception('Voice stream failed (${response.statusCode})');
+      }
+
+      // Parse SSE from byte stream
+      String buffer = '';
+      String? currentEvent;
+      String currentData = '';
+
+      await for (final chunk
+          in response.stream
+              .transform(utf8.decoder)
+              .timeout(const Duration(seconds: 120))) {
+        buffer += chunk;
+
+        while (buffer.contains('\n')) {
+          final newlineIdx = buffer.indexOf('\n');
+          final line = buffer.substring(0, newlineIdx).trimRight();
+          buffer = buffer.substring(newlineIdx + 1);
+
+          if (line.startsWith('event: ')) {
+            currentEvent = line.substring(7);
+          } else if (line.startsWith('data: ')) {
+            currentData = line.substring(6);
+          } else if (line.isEmpty && currentEvent != null) {
+            try {
+              final data = jsonDecode(currentData) as Map<String, dynamic>;
+              yield ChatStreamEvent(type: currentEvent, data: data);
+            } catch (_) {}
+            currentEvent = null;
+            currentData = '';
+          }
+        }
+      }
+    } finally {
+      client.close();
     }
-    return ChatResponse.fromJson(jsonDecode(resp.body));
   }
 
   // ── Knowledge Base (continued) ────────────────────

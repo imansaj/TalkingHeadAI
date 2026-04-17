@@ -1,76 +1,58 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:just_audio/just_audio.dart';
-
-/// Custom AudioSource that serves raw bytes as an MP3 stream.
-/// This avoids data: URIs which fail on mobile browsers (iOS Safari).
-class _BytesAudioSource extends StreamAudioSource {
-  final Uint8List _bytes;
-  _BytesAudioSource(this._bytes);
-
-  @override
-  Future<StreamAudioResponse> request([int? start, int? end]) async {
-    start ??= 0;
-    end ??= _bytes.length;
-    return StreamAudioResponse(
-      sourceLength: _bytes.length,
-      contentLength: end - start,
-      offset: start,
-      stream: Stream.value(_bytes.sublist(start, end)),
-      contentType: 'audio/mpeg',
-    );
-  }
-}
+import 'package:audioplayers/audioplayers.dart';
 
 class AudioService {
   static AudioPlayer _player = AudioPlayer();
+  static bool _unlocked = false;
 
-  /// Call once from a user gesture (e.g. first tap) to unlock audio on mobile.
+  /// Call once from a user gesture to unlock audio on mobile browsers.
   static Future<void> unlockAudio() async {
+    if (_unlocked) return;
+    _unlocked = true;
     try {
-      // Playing silence satisfies the browser autoplay policy
-      await _player.setVolume(0);
-      await _player.setAudioSource(
-        _BytesAudioSource(Uint8List(0)),
-        preload: false,
-      );
-      await _player.play();
+      // Play a tiny silent WAV to satisfy autoplay policy
+      // Minimal WAV: 44-byte header + 1 sample of silence
+      const silentWavB64 =
+          'UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+      await _player.play(BytesSource(base64Decode(silentWavB64)), volume: 0);
       await _player.stop();
-      await _player.setVolume(1);
     } catch (_) {}
   }
 
   static Future<void> playBase64Audio(String base64Audio) async {
-    // Stop and dispose previous player to avoid replaying old audio
     try {
       await _player.stop();
-      await _player.dispose();
+      await _player.release();
     } catch (_) {}
     _player = AudioPlayer();
 
-    final bytes = base64Decode(base64Audio);
-    await _player.setAudioSource(_BytesAudioSource(Uint8List.fromList(bytes)));
-    await _player.play();
+    final completer = Completer<void>();
 
-    // Wait for playback to complete
+    // Listen for completion or error
+    late StreamSubscription sub;
+    sub = _player.onPlayerComplete.listen((_) {
+      if (!completer.isCompleted) completer.complete();
+      sub.cancel();
+    });
+
     try {
-      await _player.processingStateStream.firstWhere(
-        (state) => state == ProcessingState.completed,
-      );
-    } catch (_) {
-      // Stream closed or player disposed — ignore gracefully
+      final bytes = base64Decode(base64Audio);
+      await _player.play(BytesSource(Uint8List.fromList(bytes)));
+      await completer.future;
+    } catch (e) {
+      if (!completer.isCompleted) completer.complete();
     }
   }
 
   static Future<void> stop() async {
     try {
       await _player.stop();
-      await _player.dispose();
+      await _player.release();
     } catch (_) {}
     _player = AudioPlayer();
   }
 
-  static bool get isPlaying => _player.playing;
-
-  static Stream<PlayerState> get playerStateStream => _player.playerStateStream;
+  static bool get isPlaying => _player.state == PlayerState.playing;
 }

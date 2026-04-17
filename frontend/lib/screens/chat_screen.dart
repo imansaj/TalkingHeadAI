@@ -73,7 +73,19 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } else {
       // Request permission and start recording
-      if (await _recorder.hasPermission()) {
+      try {
+        if (!await _recorder.hasPermission()) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Microphone permission denied. Please allow access in your browser settings.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
         await _recorder.start(
           const RecordConfig(
             encoder: AudioEncoder.opus,
@@ -83,6 +95,17 @@ class _ChatScreenState extends State<ChatScreen> {
           path: '',
         );
         setState(() => _isRecording = true);
+      } catch (e) {
+        debugPrint('Recording error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Microphone error: ${e.toString().split(':').last.trim()}',
+              ),
+            ),
+          );
+        }
       }
     }
   }
