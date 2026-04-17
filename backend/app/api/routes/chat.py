@@ -22,6 +22,18 @@ router = APIRouter()
 _SENTENCE_END = re.compile(r'[.!?…]\s*$')
 
 
+@router.get("/debug-search")
+async def debug_search(q: str = "hello"):
+    """Debug endpoint: test FAISS search results for a query."""
+    results = RAGService.search(q, top_k=5)
+    return {
+        "query": q,
+        "index_total": RAGService._index.ntotal if RAGService._index else 0,
+        "metadata_count": len(RAGService._metadata),
+        "results": results,
+    }
+
+
 def _sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
