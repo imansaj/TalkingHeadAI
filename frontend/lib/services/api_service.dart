@@ -95,23 +95,17 @@ class ApiService {
 
   // ── Knowledge Base ────────────────────────────────
 
-  /// Streaming voice chat via SSE — sends audio, gets back transcript + streamed response.
+  /// Streaming voice chat via SSE — sends audio as base64 JSON, gets back transcript + streamed response.
   /// Events: transcript, meta, sentence, done, error.
   static Stream<ChatStreamEvent> chatVoiceStream(Uint8List audioBytes) async* {
     final client = http.Client();
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$_base/api/chat/voice'),
-      );
+      final request = http.Request('POST', Uri.parse('$_base/api/chat/voice'));
+      request.headers['Content-Type'] = 'application/json';
       request.headers['Accept'] = 'text/event-stream';
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'audio',
-          audioBytes,
-          filename: 'recording.webm',
-        ),
-      );
+      request.body = jsonEncode({
+        'audio_base64': base64Encode(audioBytes),
+      });
 
       final response = await client
           .send(request)
@@ -121,7 +115,7 @@ class ApiService {
         throw Exception('Voice stream failed (${response.statusCode})');
       }
 
-      // Parse SSE from byte stream
+      // Parse SSE from byte stream (same parser as chatStream)
       String buffer = '';
       String? currentEvent;
       String currentData = '';

@@ -355,14 +355,17 @@ async def chat_stream(req: ChatRequest):
 
 
 @router.post("/voice")
-async def chat_voice(audio: UploadFile = File(...)):
-    """Voice-based chat — STT then SSE stream (same as /stream but from audio).
+async def chat_voice(req: ChatRequest):
+    """Voice-based chat — accepts base64 audio in JSON, does STT, then SSE streams response.
 
     First event is always: transcript {"text": "..."}
     Then same events as /stream: meta, sentence, done, error.
     """
-    audio_bytes = await audio.read()
-    transcript = STTService.transcribe(audio_bytes, audio.filename or "audio.webm")
+    if not req.audio_base64:
+        raise HTTPException(status_code=400, detail="audio_base64 is required")
+
+    audio_bytes = base64.b64decode(req.audio_base64)
+    transcript = STTService.transcribe(audio_bytes, "recording.webm")
 
     def generate():
         # Emit transcript immediately so the frontend can show it

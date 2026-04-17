@@ -57,6 +57,7 @@ class SessionUploadRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     text: str | None = None  # text query (alternative to audio)
+    audio_base64: str | None = None  # base64-encoded audio for voice input
 
 
 class AnswerType(str, Enum):
