@@ -42,6 +42,14 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <!-- Force CanvasKit renderer for consistent CustomPaint rendering
+       across normal and incognito modes. The HTML renderer produces
+       different gradient/blur/anti-aliasing results. -->
+  <script>
+    window.flutterConfiguration = {
+      renderer: "canvaskit",
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
