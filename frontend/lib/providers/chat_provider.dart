@@ -160,8 +160,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> sendVoice(Uint8List audioBytes) async {
-    final userMsg = ChatMessage(text: '🎤 Voice message', isUser: true);
-    _messages.add(userMsg);
+    _messages.add(ChatMessage(text: '🎤 Voice message', isUser: true));
+    final userMsgIdx = _messages.length - 1;
     _isLoading = true;
     _isStreaming = true;
     notifyListeners();
@@ -182,16 +182,13 @@ class ChatProvider extends ChangeNotifier {
 
         switch (event.type) {
           case 'transcript':
-            // Update user bubble with the transcribed question
+            // Update user bubble with the transcribed question immediately
             final transcript = event.data['text'] as String? ?? '';
             if (transcript.isNotEmpty) {
-              final idx = _messages.indexOf(userMsg);
-              if (idx != -1) {
-                _messages[idx] = ChatMessage(
-                  text: '🎤 $transcript',
-                  isUser: true,
-                );
-              }
+              _messages[userMsgIdx] = ChatMessage(
+                text: '🎤 $transcript',
+                isUser: true,
+              );
               notifyListeners();
             }
 
