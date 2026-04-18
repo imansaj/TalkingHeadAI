@@ -1,43 +1,36 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 
 class AudioService {
-  /// Single persistent audio element — reused across all playback to satisfy
-  /// mobile browser autoplay policies (new elements are blocked unless created
-  /// directly inside a user-gesture call-stack).
-  static web.HTMLAudioElement? _persistentAudio;
+  /// Web Audio API context — once unlocked from a user gesture, stays unlocked
+  /// for all subsequent playback. This is the reliable way to play sequential
+  /// audio on all mobile browsers including Chrome iOS.
+  static web.AudioContext? _audioCtx;
+  static web.AudioBufferSourceNode? _currentSource;
   static bool _unlocked = false;
   static bool _playing = false;
-  static String? _currentBlobUrl;
-  static StreamSubscription? _endedSub;
-  static StreamSubscription? _errorSub;
 
-  /// Call once from a user gesture to unlock audio on mobile browsers.
+  /// Call once from a user gesture to unlock AudioContext on mobile browsers.
   static Future<void> unlockAudio() async {
     if (_unlocked) return;
     _unlocked = true;
     try {
-      final audio = web.HTMLAudioElement();
-      // Attach to DOM — some mobile browsers (Chrome iOS) require this
-      audio.style.display = 'none';
-      web.document.body?.append(audio);
-      audio.preload = 'auto';
-
-      // Tiny silent WAV to satisfy autoplay policy
-      audio.src =
-          'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-      audio.volume = 0.01;
-      await audio.play().toDart;
-      audio.pause();
-      // Keep the element for reuse instead of disposing it
-      _persistentAudio = audio;
-      audio.volume = 1.0;
-      debugPrint('[AudioService] Audio unlocked successfully');
+      _audioCtx = web.AudioContext();
+      // Resume the context (required by autoplay policy on mobile)
+      await _audioCtx!.resume().toDart;
+      // Play a tiny silent buffer to fully unlock
+      final buffer = _audioCtx!.createBuffer(1, 1, 22050);
+      final source = _audioCtx!.createBufferSource();
+      source.buffer = buffer;
+      source.connect(_audioCtx!.destination);
+      source.start();
+      debugPrint('[AudioService] AudioContext unlocked successfully');
     } catch (e) {
-      debugPrint('[AudioService] Audio unlock failed: $e');
+      debugPrint('[AudioService] AudioContext unlock failed: $e');
       _unlocked = false;
     }
   }
@@ -52,95 +45,63 @@ class AudioService {
       final bytes = base64Decode(base64Audio);
       debugPrint('[AudioService] Playing ${bytes.length} bytes of audio');
 
-      // Create a Blob URL — more reliable than data URIs on web
-      final jsArray = bytes.toJS;
-      final blob = web.Blob(
-        [jsArray].toJS,
-        web.BlobPropertyBag(type: 'audio/mpeg'),
-      );
-      final blobUrl = web.URL.createObjectURL(blob);
-      _currentBlobUrl = blobUrl;
+      // Ensure context exists
+      _audioCtx ??= web.AudioContext();
+      final ctx = _audioCtx!;
 
-      // Reuse persistent element if available (mobile); fallback to new one
-      final audio = _persistentAudio ?? web.HTMLAudioElement();
-      if (_persistentAudio == null) {
-        audio.style.display = 'none';
-        audio.preload = 'auto';
-        web.document.body?.append(audio);
-        _persistentAudio = audio;
+      // Resume context if it's suspended (e.g. after tab switch)
+      if (ctx.state == 'suspended') {
+        await ctx.resume().toDart;
       }
+
+      // Decode MP3 bytes into an AudioBuffer
+      final jsBytes = bytes.buffer.toJS;
+      final audioBuffer = await ctx.decodeAudioData(jsBytes).toDart;
+
       _playing = true;
 
-      // Cancel previous listeners before adding new ones
-      _endedSub?.cancel();
-      _errorSub?.cancel();
+      // Create a source node and play
+      final source = ctx.createBufferSource();
+      _currentSource = source;
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
 
-      _endedSub = audio.onEnded.listen((_) {
+      source.onEnded.listen((_) {
         debugPrint('[AudioService] onEnded fired');
-        _revokeBlobUrl();
         _playing = false;
+        _currentSource = null;
         if (!completer.isCompleted) completer.complete();
       });
 
-      _errorSub = audio.onError.listen((_) {
-        debugPrint(
-          '[AudioService] Audio error: code=${audio.error?.code}, message=${audio.error?.message}',
-        );
-        _revokeBlobUrl();
-        _playing = false;
-        if (!completer.isCompleted) completer.complete();
-      });
-
-      // Set source and play. Do NOT call load() — it can reset the
-      // autoplay blessing on Chrome iOS.
-      audio.src = blobUrl;
-
-      try {
-        await audio.play().toDart;
-      } catch (playError) {
-        // play() can reject on mobile — log it and complete so the queue
-        // doesn't get stuck.
-        debugPrint('[AudioService] play() rejected: $playError');
-        _revokeBlobUrl();
-        _playing = false;
-        if (!completer.isCompleted) completer.complete();
-        return;
-      }
+      source.start();
 
       // Timeout safety
       await completer.future.timeout(
         const Duration(seconds: 60),
         onTimeout: () {
           debugPrint('[AudioService] Playback timed out');
-          _revokeBlobUrl();
           _playing = false;
-          audio.pause();
+          try {
+            source.stop();
+          } catch (_) {}
+          _currentSource = null;
         },
       );
     } catch (e) {
       debugPrint('[AudioService] playBase64Audio failed: $e');
       _playing = false;
+      _currentSource = null;
       if (!completer.isCompleted) completer.complete();
-    }
-  }
-
-  static void _revokeBlobUrl() {
-    if (_currentBlobUrl != null) {
-      web.URL.revokeObjectURL(_currentBlobUrl!);
-      _currentBlobUrl = null;
     }
   }
 
   static Future<void> stop() async {
     try {
-      _endedSub?.cancel();
-      _errorSub?.cancel();
-      final audio = _persistentAudio;
-      if (audio != null) {
-        audio.pause();
-        audio.currentTime = 0;
+      final source = _currentSource;
+      if (source != null) {
+        source.stop();
+        _currentSource = null;
       }
-      _revokeBlobUrl();
       _playing = false;
     } catch (_) {}
   }
