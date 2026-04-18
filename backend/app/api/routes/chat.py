@@ -326,6 +326,7 @@ async def chat_stream(req: ChatRequest):
                 q_id,
                 embed_text=question,
                 context_text=f"Q: {question}\nA: {general_response}",
+                source_type="unanswered",
             )
 
             t1 = time.time()
@@ -546,6 +547,7 @@ async def chat_voice(req: ChatRequest):
                 q_id,
                 embed_text=question,
                 context_text=f"Q: {question}\nA: {general_response}",
+                source_type="unanswered",
             )
 
             logger.info("[TIMING] Voice streaming total: %.2fs", time.time() - t0)
