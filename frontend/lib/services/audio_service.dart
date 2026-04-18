@@ -1,66 +1,107 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:js_interop';
 import 'dart:typed_data';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:web/web.dart' as web;
 
 class AudioService {
-  static final AudioPlayer _player = AudioPlayer();
+  static web.HTMLAudioElement? _currentAudio;
   static bool _unlocked = false;
+  static bool _playing = false;
 
   /// Call once from a user gesture to unlock audio on mobile browsers.
-  /// Must be awaited within the gesture handler for best results.
   static Future<void> unlockAudio() async {
     if (_unlocked) return;
     _unlocked = true;
     try {
-      // Play a tiny silent WAV at low (non-zero) volume to satisfy autoplay policy.
-      // Volume must be > 0 for some browsers to count it as a real play.
-      const silentWavB64 =
-          'UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-      await _player.play(BytesSource(base64Decode(silentWavB64)), volume: 0.01);
-      // Brief delay to let the browser register the play and unlock AudioContext
-      await Future.delayed(const Duration(milliseconds: 50));
-      await _player.stop();
-      await _player.setVolume(1.0);
+      final audio = web.HTMLAudioElement();
+      // Tiny silent WAV to satisfy autoplay policy
+      audio.src =
+          'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+      audio.volume = 0.01;
+      await audio.play().toDart;
+      audio.pause();
+      audio.remove();
       debugPrint('[AudioService] Audio unlocked successfully');
     } catch (e) {
       debugPrint('[AudioService] Audio unlock failed: $e');
-      _unlocked = false; // Allow retry on next gesture
+      _unlocked = false;
     }
   }
 
   static Future<void> playBase64Audio(String base64Audio) async {
-    // Stop any current playback but REUSE the same player instance.
-    // Creating a new player loses the user-gesture context on mobile.
-    try {
-      await _player.stop();
-    } catch (_) {}
+    // Stop any current playback
+    await stop();
 
     final completer = Completer<void>();
 
-    late StreamSubscription sub;
-    sub = _player.onPlayerComplete.listen((_) {
-      if (!completer.isCompleted) completer.complete();
-      sub.cancel();
-    });
-
     try {
       final bytes = base64Decode(base64Audio);
-      await _player.play(BytesSource(Uint8List.fromList(bytes)));
-      await completer.future;
+      debugPrint('[AudioService] Playing ${bytes.length} bytes of audio');
+
+      // Create a Blob URL — more reliable than data URIs on web
+      final jsArray = bytes.toJS;
+      final blob = web.Blob(
+        [jsArray].toJS,
+        web.BlobPropertyBag(type: 'audio/mpeg'),
+      );
+      final blobUrl = web.URL.createObjectURL(blob);
+
+      final audio = web.HTMLAudioElement();
+      _currentAudio = audio;
+      _playing = true;
+      audio.src = blobUrl;
+
+      audio.onEnded.listen((_) {
+        web.URL.revokeObjectURL(blobUrl);
+        _playing = false;
+        _currentAudio = null;
+        if (!completer.isCompleted) completer.complete();
+      });
+
+      audio.onError.listen((_) {
+        debugPrint(
+          '[AudioService] Audio error: code=${audio.error?.code}, message=${audio.error?.message}',
+        );
+        web.URL.revokeObjectURL(blobUrl);
+        _playing = false;
+        _currentAudio = null;
+        if (!completer.isCompleted) completer.complete();
+      });
+
+      await audio.play().toDart;
+
+      // Timeout safety
+      await completer.future.timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          debugPrint('[AudioService] Playback timed out');
+          web.URL.revokeObjectURL(blobUrl);
+          _playing = false;
+          audio.pause();
+          _currentAudio = null;
+        },
+      );
     } catch (e) {
       debugPrint('[AudioService] playBase64Audio failed: $e');
+      _playing = false;
+      _currentAudio = null;
       if (!completer.isCompleted) completer.complete();
-      sub.cancel();
     }
   }
 
   static Future<void> stop() async {
     try {
-      await _player.stop();
+      final audio = _currentAudio;
+      if (audio != null) {
+        audio.pause();
+        audio.src = '';
+        _currentAudio = null;
+      }
+      _playing = false;
     } catch (_) {}
   }
 
-  static bool get isPlaying => _player.state == PlayerState.playing;
+  static bool get isPlaying => _playing;
 }
