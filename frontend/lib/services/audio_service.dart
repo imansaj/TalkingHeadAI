@@ -5,9 +5,15 @@ import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 
 class AudioService {
-  static web.HTMLAudioElement? _currentAudio;
+  /// Single persistent audio element — reused across all playback to satisfy
+  /// mobile browser autoplay policies (new elements are blocked unless created
+  /// directly inside a user-gesture call-stack).
+  static web.HTMLAudioElement? _persistentAudio;
   static bool _unlocked = false;
   static bool _playing = false;
+  static String? _currentBlobUrl;
+  static StreamSubscription? _endedSub;
+  static StreamSubscription? _errorSub;
 
   /// Call once from a user gesture to unlock audio on mobile browsers.
   static Future<void> unlockAudio() async {
@@ -21,7 +27,9 @@ class AudioService {
       audio.volume = 0.01;
       await audio.play().toDart;
       audio.pause();
-      audio.remove();
+      // Keep the element for reuse instead of disposing it
+      _persistentAudio = audio;
+      audio.volume = 1.0;
       debugPrint('[AudioService] Audio unlocked successfully');
     } catch (e) {
       debugPrint('[AudioService] Audio unlock failed: $e');
@@ -46,29 +54,33 @@ class AudioService {
         web.BlobPropertyBag(type: 'audio/mpeg'),
       );
       final blobUrl = web.URL.createObjectURL(blob);
+      _currentBlobUrl = blobUrl;
 
-      final audio = web.HTMLAudioElement();
-      _currentAudio = audio;
+      // Reuse persistent element if available (mobile); fallback to new one (desktop)
+      final audio = _persistentAudio ?? web.HTMLAudioElement();
+      _persistentAudio ??= audio;
       _playing = true;
-      audio.src = blobUrl;
 
-      audio.onEnded.listen((_) {
-        web.URL.revokeObjectURL(blobUrl);
+      // Cancel previous listeners before adding new ones
+      _endedSub?.cancel();
+      _errorSub?.cancel();
+
+      _endedSub = audio.onEnded.listen((_) {
+        _revokeBlobUrl();
         _playing = false;
-        _currentAudio = null;
         if (!completer.isCompleted) completer.complete();
       });
 
-      audio.onError.listen((_) {
+      _errorSub = audio.onError.listen((_) {
         debugPrint(
           '[AudioService] Audio error: code=${audio.error?.code}, message=${audio.error?.message}',
         );
-        web.URL.revokeObjectURL(blobUrl);
+        _revokeBlobUrl();
         _playing = false;
-        _currentAudio = null;
         if (!completer.isCompleted) completer.complete();
       });
 
+      audio.src = blobUrl;
       await audio.play().toDart;
 
       // Timeout safety
@@ -76,28 +88,36 @@ class AudioService {
         const Duration(seconds: 60),
         onTimeout: () {
           debugPrint('[AudioService] Playback timed out');
-          web.URL.revokeObjectURL(blobUrl);
+          _revokeBlobUrl();
           _playing = false;
           audio.pause();
-          _currentAudio = null;
         },
       );
     } catch (e) {
       debugPrint('[AudioService] playBase64Audio failed: $e');
       _playing = false;
-      _currentAudio = null;
       if (!completer.isCompleted) completer.complete();
+    }
+  }
+
+  static void _revokeBlobUrl() {
+    if (_currentBlobUrl != null) {
+      web.URL.revokeObjectURL(_currentBlobUrl!);
+      _currentBlobUrl = null;
     }
   }
 
   static Future<void> stop() async {
     try {
-      final audio = _currentAudio;
+      _endedSub?.cancel();
+      _errorSub?.cancel();
+      final audio = _persistentAudio;
       if (audio != null) {
         audio.pause();
+        // Reset to empty to stop loading but do NOT discard the element
         audio.src = '';
-        _currentAudio = null;
       }
+      _revokeBlobUrl();
       _playing = false;
     } catch (_) {}
   }
