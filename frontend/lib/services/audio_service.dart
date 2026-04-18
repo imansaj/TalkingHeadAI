@@ -82,6 +82,29 @@ class AudioService {
 
       audio.src = blobUrl;
       audio.load();
+
+      // Wait for the audio to be ready before calling play().
+      // Chrome on iOS (WebKit) may reject play() if called before the
+      // media element has buffered enough data after load().
+      final readyCompleter = Completer<void>();
+      StreamSubscription? canPlaySub;
+      canPlaySub = audio.onCanPlay.listen((_) {
+        canPlaySub?.cancel();
+        if (!readyCompleter.isCompleted) readyCompleter.complete();
+      });
+      // If already ready (e.g. desktop, cached), don't wait forever
+      if (audio.readyState >= 3) {
+        canPlaySub.cancel();
+        if (!readyCompleter.isCompleted) readyCompleter.complete();
+      }
+      await readyCompleter.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          canPlaySub?.cancel();
+          debugPrint('[AudioService] canplay timeout — trying play anyway');
+        },
+      );
+
       await audio.play().toDart;
 
       // Timeout safety
