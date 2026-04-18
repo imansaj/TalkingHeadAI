@@ -31,7 +31,8 @@ class SessionService:
             item["processed"] = True
             table.update_item(
                 Key={"session_id": session_id},
-                UpdateExpression="SET processed = :p",
+                UpdateExpression="SET #p = :p",
+                ExpressionAttributeNames={"#p": "processed"},
                 ExpressionAttributeValues={":p": True},
             )
             logger.info(
@@ -62,7 +63,8 @@ class SessionService:
 
         table.update_item(
             Key={"session_id": session_id},
-            UpdateExpression="SET processed = :p",
+            UpdateExpression="SET #p = :p",
+            ExpressionAttributeNames={"#p": "processed"},
             ExpressionAttributeValues={":p": True},
         )
 
@@ -106,7 +108,8 @@ class SessionService:
                 cls._index_transcript(session_id, title, transcript)
                 table.update_item(
                     Key={"session_id": session_id},
-                    UpdateExpression="SET processed = :p",
+                    UpdateExpression="SET #p = :p",
+                    ExpressionAttributeNames={"#p": "processed"},
                     ExpressionAttributeValues={":p": True},
                 )
                 count += 1
