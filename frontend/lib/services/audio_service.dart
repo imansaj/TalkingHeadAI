@@ -81,6 +81,7 @@ class AudioService {
       });
 
       audio.src = blobUrl;
+      audio.load();
       await audio.play().toDart;
 
       // Timeout safety
@@ -114,8 +115,9 @@ class AudioService {
       final audio = _persistentAudio;
       if (audio != null) {
         audio.pause();
-        // Reset to empty to stop loading but do NOT discard the element
-        audio.src = '';
+        // Do NOT reset src — setting src='' can break the "blessed"
+        // autoplay state on iOS Safari.
+        audio.currentTime = 0;
       }
       _revokeBlobUrl();
       _playing = false;
