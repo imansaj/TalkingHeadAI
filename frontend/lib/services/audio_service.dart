@@ -21,6 +21,11 @@ class AudioService {
     _unlocked = true;
     try {
       final audio = web.HTMLAudioElement();
+      // Attach to DOM — some mobile browsers (Chrome iOS) require this
+      audio.style.display = 'none';
+      web.document.body?.append(audio);
+      audio.preload = 'auto';
+
       // Tiny silent WAV to satisfy autoplay policy
       audio.src =
           'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
@@ -56,9 +61,14 @@ class AudioService {
       final blobUrl = web.URL.createObjectURL(blob);
       _currentBlobUrl = blobUrl;
 
-      // Reuse persistent element if available (mobile); fallback to new one (desktop)
+      // Reuse persistent element if available (mobile); fallback to new one
       final audio = _persistentAudio ?? web.HTMLAudioElement();
-      _persistentAudio ??= audio;
+      if (_persistentAudio == null) {
+        audio.style.display = 'none';
+        audio.preload = 'auto';
+        web.document.body?.append(audio);
+        _persistentAudio = audio;
+      }
       _playing = true;
 
       // Cancel previous listeners before adding new ones
@@ -66,6 +76,7 @@ class AudioService {
       _errorSub?.cancel();
 
       _endedSub = audio.onEnded.listen((_) {
+        debugPrint('[AudioService] onEnded fired');
         _revokeBlobUrl();
         _playing = false;
         if (!completer.isCompleted) completer.complete();
@@ -80,32 +91,21 @@ class AudioService {
         if (!completer.isCompleted) completer.complete();
       });
 
+      // Set source and play. Do NOT call load() — it can reset the
+      // autoplay blessing on Chrome iOS.
       audio.src = blobUrl;
-      audio.load();
 
-      // Wait for the audio to be ready before calling play().
-      // Chrome on iOS (WebKit) may reject play() if called before the
-      // media element has buffered enough data after load().
-      final readyCompleter = Completer<void>();
-      StreamSubscription? canPlaySub;
-      canPlaySub = audio.onCanPlay.listen((_) {
-        canPlaySub?.cancel();
-        if (!readyCompleter.isCompleted) readyCompleter.complete();
-      });
-      // If already ready (e.g. desktop, cached), don't wait forever
-      if (audio.readyState >= 3) {
-        canPlaySub.cancel();
-        if (!readyCompleter.isCompleted) readyCompleter.complete();
+      try {
+        await audio.play().toDart;
+      } catch (playError) {
+        // play() can reject on mobile — log it and complete so the queue
+        // doesn't get stuck.
+        debugPrint('[AudioService] play() rejected: $playError');
+        _revokeBlobUrl();
+        _playing = false;
+        if (!completer.isCompleted) completer.complete();
+        return;
       }
-      await readyCompleter.future.timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          canPlaySub?.cancel();
-          debugPrint('[AudioService] canplay timeout — trying play anyway');
-        },
-      );
-
-      await audio.play().toDart;
 
       // Timeout safety
       await completer.future.timeout(
@@ -138,8 +138,6 @@ class AudioService {
       final audio = _persistentAudio;
       if (audio != null) {
         audio.pause();
-        // Do NOT reset src — setting src='' can break the "blessed"
-        // autoplay state on iOS Safari.
         audio.currentTime = 0;
       }
       _revokeBlobUrl();
